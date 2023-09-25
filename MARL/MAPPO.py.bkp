@@ -18,7 +18,7 @@ from copy import deepcopy
 from single_agent.Memory_common import OnPolicyReplayMemory
 from single_agent.Model_common import ActorNetwork, CriticNetwork
 from common.utils import index_to_one_hot, to_tensor_var, VideoRecorder
-import matplotlib.pyplot as plt
+
 
 class MAPPO:
     """
@@ -31,7 +31,7 @@ class MAPPO:
                  target_update_steps=5, clip_param=0.2,
                  reward_gamma=0.99, reward_scale=20,
                  actor_hidden_size=128, critic_hidden_size=128,
-                 actor_output_act=nn.functional.hardtanh, critic_loss="mse",
+                 actor_output_act=nn.functional.log_softmax, critic_loss="mse",
                  actor_lr=0.0001, critic_lr=0.0001, test_seeds=0,
                  optimizer_type="rmsprop", entropy_reg=0.01,
                  max_grad_norm=0.5, batch_size=100, episodes_before_train=100,
@@ -72,7 +72,6 @@ class MAPPO:
         self.actor = ActorNetwork(self.state_dim, self.actor_hidden_size,
                                   self.action_dim, self.actor_output_act)
         self.critic = CriticNetwork(self.state_dim, self.action_dim, self.critic_hidden_size, 1)
-
         # to ensure target network and learning network has the same weights
         self.actor_target = deepcopy(self.actor)
         self.critic_target = deepcopy(self.critic)
@@ -94,9 +93,6 @@ class MAPPO:
         self.average_speed = [0]
         self.epoch_steps = [0]
 
-        self.cav_pos = []
-        self.hdv_pos = []
-
     # agent interact with the environment to collect experience
     def interact(self):
         if (self.max_steps is not None) and (self.n_steps >= self.max_steps):
@@ -113,8 +109,9 @@ class MAPPO:
         for i in range(self.roll_out_n_steps):
             states.append(self.env_state)
             action = self.exploration_action(self.env_state, self.n_agents)
+            print("action before step: {}".format(action))
             next_state, global_reward, done, info = self.env.step(tuple(action))
-            actions.append(action)
+            actions.append([index_to_one_hot(a, self.action_dim) for a in action])
             self.episode_rewards[-1] += global_reward
             self.epoch_steps[-1] += 1
             if self.reward_type == "regionalR":
@@ -127,9 +124,6 @@ class MAPPO:
             self.env_state = next_state
 
             self.n_steps += 1
-
-            self.cav_pos.extend(info["agents_info"])
-            self.hdv_pos.extend(info["hdv_info"])
             if done:
                 self.env_state, _ = self.env.reset()
                 break
@@ -143,9 +137,6 @@ class MAPPO:
             self.average_speed[-1] = average_speed / self.epoch_steps[-1]
             self.average_speed.append(0)
             self.epoch_steps.append(0)
-            # self.debug_vehicle_position()
-            self.cav_pos = []
-            self.hdv_pos = []
         else:
             self.episode_done = False
             final_action = self.action(final_state)
@@ -215,7 +206,7 @@ class MAPPO:
         softmax_action = []
         for agent_id in range(n_agents):
             softmax_action_var = th.exp(self.actor(state_var[:, agent_id, :]))
-            
+
             if self.use_cuda:
                 softmax_action.append(softmax_action_var.data.cpu().numpy()[0])
             else:
@@ -227,18 +218,15 @@ class MAPPO:
         softmax_actions = self._softmax_action(state, n_agents)
         actions = []
         for pi in softmax_actions:
-            noise = np.random.choice([-0.01, 0.01])*np.random.randn(*pi.shape)
-            actions.append(pi + noise)
+            actions.append(np.random.choice(np.arange(len(pi)), p=pi))
         return actions
 
     # choose an action based on state for execution
     def action(self, state, n_agents):
         softmax_actions = self._softmax_action(state, n_agents)
         actions = []
-        # very mild noise for variability
         for pi in softmax_actions:
-            noise = np.random.choice([-0.0001, 0.0001])*np.random.randn(*pi.shape)
-            actions.append(pi + noise)
+            actions.append(np.random.choice(np.arange(len(pi)), p=pi))
         return actions
 
     # evaluate value for a state-action pair
@@ -268,8 +256,6 @@ class MAPPO:
         video_recorder = None
         seeds = [int(s) for s in self.test_seeds.split(',')]
 
-        render = False
-
         for i in range(eval_episodes):
             avg_speed = 0
             step = 0
@@ -287,31 +273,28 @@ class MAPPO:
                 state, action_mask = env.reset(is_training=False, testing_seeds=seeds[i])
 
             n_agents = len(env.controlled_vehicles)
-
-            if render:
-                rendered_frame = env.render(mode="rgb_array")
-                video_filename = os.path.join(output_dir,
-                                            "testing_episode{}".format(self.n_episodes + 1) + '_{}'.format(i) +
-                                            '.mp4')
-                # Init video recording
-                if video_filename is not None:
-                    print("Recording video to {} ({}x{}x{}@{}fps)".format(video_filename, *rendered_frame.shape,
-                                                                          5))
-                    video_recorder = VideoRecorder(video_filename,
-                                                   frame_size=rendered_frame.shape, fps=5)
-                    video_recorder.add_frame(rendered_frame)
-                else:
-                    video_recorder = None
+            rendered_frame = env.render(mode="rgb_array")
+            video_filename = os.path.join(output_dir,
+                                          "testing_episode{}".format(self.n_episodes + 1) + '_{}'.format(i) +
+                                          '.mp4')
+            # Init video recording
+            if video_filename is not None:
+                print("Recording video to {} ({}x{}x{}@{}fps)".format(video_filename, *rendered_frame.shape,
+                                                                      5))
+                video_recorder = VideoRecorder(video_filename,
+                                               frame_size=rendered_frame.shape, fps=5)
+                video_recorder.add_frame(rendered_frame)
+            else:
+                video_recorder = None
 
             while not done:
                 step += 1
                 action = self.action(state, n_agents)
                 state, reward, done, info = env.step(action)
                 avg_speed += info["average_speed"]
-                if render:
-                    rendered_frame = env.render(mode="rgb_array")
-                    if video_recorder is not None:
-                        video_recorder.add_frame(rendered_frame)
+                rendered_frame = env.render(mode="rgb_array")
+                if video_recorder is not None:
+                    video_recorder.add_frame(rendered_frame)
 
                 rewards_i.append(reward)
                 infos_i.append(info)
@@ -379,40 +362,3 @@ class MAPPO:
                  'model_state_dict': self.actor.state_dict(),
                  'optimizer_state_dict': self.actor_optimizer.state_dict()},
                 file_path)
-    
-    def debug_vehicle_position(self):
-        cav = np.array(self.cav_pos)
-        hdv = np.array(self.hdv_pos)
-        
-        plt.figure(figsize=(12,5))
-        
-        # plt.subplot(1,2,1)
-        create_scatter_plot(cav, hdv)
-
-        # plt.subplot(1,2,2)
-        # create_line_plot(cav, hdv)     
-
-        plt.tight_layout() 
-        plt.show()
-
-def create_scatter_plot(cav, hdv, title="Positions"):
-    plt.title(title)
-    # Create a scatter plot for the cav
-    plt.scatter(cav[:, 0], cav[:, 1], label='CAV', color='red', alpha=0.5)
-
-    # Create a scatter plot for the hdv
-    plt.scatter(hdv[:, 0], hdv[:, 1], label='HDV', color='blue', alpha=0.5)
-
-    # Add labels and a legend
-    plt.xlabel('X-pos')
-    plt.ylabel('Y-pos')
-    plt.legend()
-
-def create_line_plot(cav, hdv, title = "Speed"):
-    x = range(len(cav))
-    plt.plot(x, cav[:, 2], label='CAV', color='red', linestyle='-')
-    plt.plot(x, hdv[:, 2], label='HDV', color='blue', linestyle='-')
-    plt.title(title)
-    plt.xlabel("Espisode")
-    plt.ylabel("Speed")
-    plt.legend()

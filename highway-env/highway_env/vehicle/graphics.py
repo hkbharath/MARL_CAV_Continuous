@@ -41,6 +41,9 @@ class VehicleGraphics(object):
         if not surface.is_visible(vehicle.position):
             return
 
+        if type(vehicle) is BicycleVehicle or type(vehicle) is Vehicle:
+            print("position {} is visible".format(vehicle.position))
+
         v = vehicle
         tire_length, tire_width = 1, 0.3
 
@@ -151,9 +154,12 @@ class VehicleGraphics(object):
             color = cls.YELLOW
         elif isinstance(vehicle, IDMVehicle):
             color = cls.GREEN
-        elif isinstance(vehicle, MDPVehicle):
+        elif isinstance(vehicle, MDPVehicle) or isinstance(vehicle, BicycleVehicle):
             color = cls.EGO_COLOR
         if transparent:
             color = (color[0], color[1], color[2], 30)
+        if type(vehicle) is BicycleVehicle or type(vehicle) is Vehicle:
+            print("color: ", color )
+            print("vehicle: ", type(vehicle))
         return color
 

@@ -1,4 +1,4 @@
-from MAPPO import MAPPO
+from MARL.MAPPO import MAPPO
 from common.utils import agg_double_list, copy_file_ppo, init_dir
 import sys
 sys.path.append("../highway-env")
@@ -20,7 +20,7 @@ def parse_args():
         + seed = 0
     """
     default_base_dir = "./results/"
-    default_config_dir = 'configs/configs_ppo.ini'
+    default_config_dir = 'configs/configs_ppo_continuous.ini'
     parser = argparse.ArgumentParser(description=('Train or evaluate policy on RL environment '
                                                   'using mappo'))
     parser.add_argument('--base-dir', type=str, required=False,
@@ -34,6 +34,8 @@ def parse_args():
     parser.add_argument('--evaluation-seeds', type=str, required=False,
                         default=','.join([str(i) for i in range(0, 600, 20)]),
                         help="random seeds for evaluation, split by ,")
+    parser.add_argument('--env-name', type=str, required=False,
+                        default='merge-multi-agent-continuous-v0', help="environment name")
     args = parser.parse_args()
     return args
 
@@ -78,7 +80,7 @@ def train(args):
     reward_scale = config.getfloat('TRAIN_CONFIG', 'reward_scale')
 
     # init env
-    env = gym.make('merge-multi-agent-v0')
+    env = gym.make(args.env_name)
     env.config['seed'] = config.getint('ENV_CONFIG', 'seed')
     env.config['simulation_frequency'] = config.getint('ENV_CONFIG', 'simulation_frequency')
     env.config['duration'] = config.getint('ENV_CONFIG', 'duration')
@@ -94,7 +96,7 @@ def train(args):
 
     assert env.T % ROLL_OUT_N_STEPS == 0
 
-    env_eval = gym.make('merge-multi-agent-v0')
+    env_eval = gym.make(args.env_name)
     env_eval.config['seed'] = config.getint('ENV_CONFIG', 'seed') + 1
     env_eval.config['simulation_frequency'] = config.getint('ENV_CONFIG', 'simulation_frequency')
     env_eval.config['duration'] = config.getint('ENV_CONFIG', 'duration')

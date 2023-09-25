@@ -450,7 +450,6 @@ class AbstractEnv(gym.Env):
         average_speed = 0
         if self.road is None or self.vehicle is None:
             raise NotImplementedError("The road and vehicle must be initialized in the environment implementation")
-
         self.steps += 1
         if self.config["safety_guarantee"]:
             self.new_action = self.safety_supervisor(action)
@@ -491,6 +490,10 @@ class AbstractEnv(gym.Env):
             "vehicle_position": np.array(self.vehicle_pos)
         }
 
+        # for v in self.controlled_vehicles:
+        #     if not v.on_road:
+        #         print("going off road...")
+        #         break
         # if terminal:
         #     # print("steps, action, new_action: ", self.steps, action, self.new_action)
         #     print(self.steps)

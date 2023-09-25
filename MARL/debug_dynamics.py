@@ -2,6 +2,8 @@ from typing import Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
+sys.path.append("../highway-env")
 
 from highway_env.road.road import Road
 from highway_env.types import Vector
@@ -21,10 +23,8 @@ class BicycleVehicle(Vehicle):
     FRICTION_FRONT: float = 15.0 * MASS  # [N]
     FRICTION_REAR: float = 15.0 * MASS  # [N]
 
-    MAX_ANGULAR_SPEED: float = 3 * np.pi  # [rad/s] 2* np.pi before
-    MAX_SPEED: float = 40  # [m/s] 15 before
-    MAX_STEERING_ANGLE: float = np.pi / 3  # [rad] np.pi/2 before
-    MAX_ACCELERATION: float = 3  # [m/s2] 
+    MAX_ANGULAR_SPEED: float = 2 * np.pi  # [rad/s]
+    MAX_SPEED: float = 15  # [m/s]
 
     def __init__(self, road: Road, position: Vector, heading: float = 0, speed: float = 0) -> None:
         super().__init__(road, position, heading, speed)
@@ -93,14 +93,6 @@ class BicycleVehicle(Vehicle):
     def step(self, dt: float) -> None:
         self.clip_actions()
         derivative = self.derivative
-        
-        new_pos = self.position + derivative[0:2, 0] * dt
-        # if not self.lane.on_lane(new_pos):
-        #     # print("going off road...")
-        #     # self.action = {"acceleration": 0, "steering": 0}
-        #     # derivative = self.derivative
-        #    return
-        
         self.position += derivative[0:2, 0] * dt
         self.heading += self.yaw_rate * dt
         self.speed += self.action['acceleration'] * dt
@@ -112,7 +104,7 @@ class BicycleVehicle(Vehicle):
     def clip_actions(self) -> None:
         super().clip_actions()
         # Required because of the linearisation
-        self.action["steering"] = np.clip(self.action["steering"], -self.MAX_STEERING_ANGLE, self.MAX_STEERING_ANGLE)
+        self.action["steering"] = np.clip(self.action["steering"], -np.pi/2, np.pi/2)
         self.yaw_rate = np.clip(self.yaw_rate, -self.MAX_ANGULAR_SPEED, self.MAX_ANGULAR_SPEED)
 
     def lateral_lpv_structure(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -191,10 +183,6 @@ class BicycleVehicle(Vehicle):
         A = A0 + np.tensordot(self.theta, phi, axes=[0, 0])
         return A, B
 
-    def _preprocess_action(self, action):
-        action["acceleration"] = self.MAX_ACCELERATION * action["acceleration"]
-        action["steering"] = self.MAX_STEERING_ANGLE * action["steering"]
-        return action
 
 def simulate(dt: float = 0.1) -> None:
     import control

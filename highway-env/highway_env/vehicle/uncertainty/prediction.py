@@ -11,6 +11,7 @@ from highway_env.types import Vector
 from highway_env.vehicle.behavior import LinearVehicle
 from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.kinematics import Vehicle
+from highway_env.vehicle.dynamics import BicycleVehicle
 
 if TYPE_CHECKING:
     from highway_env.road.objects import RoadObject
@@ -372,7 +373,7 @@ class IntervalVehicle(LinearVehicle):
 
         :param other: the other vehicle
         """
-        if not isinstance(other, MDPVehicle):
+        if not isinstance(other, MDPVehicle) or isinstance(other, BicycleVehicle):
             super().check_collision(other)
             return
 

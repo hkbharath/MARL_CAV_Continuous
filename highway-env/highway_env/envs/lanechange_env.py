@@ -40,7 +40,7 @@ class LaneChnageMARL(AbstractEnv):
                 "controlled_vehicles": 5,
                 "safety_guarantee": False,
                 "action_masking": False,
-                "target_lane": 1,
+                "target_lane": 0,
                 "initial_lane_id": 1,
                 "length": 300,
                 "screen_width": 1200,

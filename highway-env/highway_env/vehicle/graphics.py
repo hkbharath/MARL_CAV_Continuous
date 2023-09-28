@@ -3,6 +3,7 @@ from typing import List, Tuple, TYPE_CHECKING
 
 import numpy as np
 import pygame
+import time
 
 from highway_env.types import Vector
 from highway_env.vehicle.dynamics import BicycleVehicle
@@ -43,6 +44,7 @@ class VehicleGraphics(object):
 
         if type(vehicle) is BicycleVehicle or type(vehicle) is Vehicle:
             print("position {} is visible".format(vehicle.position))
+            time.sleep(0.5)
 
         v = vehicle
         tire_length, tire_width = 1, 0.3
@@ -158,8 +160,5 @@ class VehicleGraphics(object):
             color = cls.EGO_COLOR
         if transparent:
             color = (color[0], color[1], color[2], 30)
-        if type(vehicle) is BicycleVehicle or type(vehicle) is Vehicle:
-            print("color: ", color )
-            print("vehicle: ", type(vehicle))
         return color
 

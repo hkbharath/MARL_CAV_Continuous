@@ -35,7 +35,7 @@ class MAPPO:
                  actor_lr=0.0001, critic_lr=0.0001, test_seeds=0,
                  optimizer_type="rmsprop", entropy_reg=0.01,
                  max_grad_norm=0.5, batch_size=100, episodes_before_train=100,
-                 use_cuda=True, traffic_density=1, reward_type="global_R"):
+                 use_cuda=True, traffic_density=1, reward_type="global_R", render = False):
 
         assert traffic_density in [1, 2, 3]
         assert reward_type in ["regionalR", "global_R"]
@@ -68,6 +68,7 @@ class MAPPO:
         self.target_tau = target_tau
         self.target_update_steps = target_update_steps
         self.clip_param = clip_param
+        self.render = render
 
         self.actor = ActorNetwork(self.state_dim, self.actor_hidden_size,
                                   self.action_dim, self.actor_output_act)
@@ -113,6 +114,9 @@ class MAPPO:
         for i in range(self.roll_out_n_steps):
             states.append(self.env_state)
             action = self.exploration_action(self.env_state, self.n_agents)
+            # for idx in range(len(action)):
+            #     action[idx] = np.zeros(action[idx].shape)
+            # print(action)    
             next_state, global_reward, done, info = self.env.step(tuple(action))
             actions.append(action)
             self.episode_rewards[-1] += global_reward
@@ -239,6 +243,8 @@ class MAPPO:
         for pi in softmax_actions:
             noise = np.random.choice([-0.0001, 0.0001])*np.random.randn(*pi.shape)
             actions.append(pi + noise)
+        # for idx in range(len(actions)):
+        #     actions[idx] = np.zeros(actions[idx].shape)
         return actions
 
     # evaluate value for a state-action pair
@@ -268,13 +274,13 @@ class MAPPO:
         video_recorder = None
         seeds = [int(s) for s in self.test_seeds.split(',')]
 
-        render = False
-
         for i in range(eval_episodes):
             avg_speed = 0
             step = 0
             rewards_i = []
             infos_i = []
+            self.cav_pos = []
+            self.hdv_pos = []
             done = False
             if is_train:
                 if self.traffic_density == 1:
@@ -288,7 +294,7 @@ class MAPPO:
 
             n_agents = len(env.controlled_vehicles)
 
-            if render:
+            if self.render:
                 rendered_frame = env.render(mode="rgb_array")
                 video_filename = os.path.join(output_dir,
                                             "testing_episode{}".format(self.n_episodes + 1) + '_{}'.format(i) +
@@ -308,13 +314,15 @@ class MAPPO:
                 action = self.action(state, n_agents)
                 state, reward, done, info = env.step(action)
                 avg_speed += info["average_speed"]
-                if render:
+                if self.render:
                     rendered_frame = env.render(mode="rgb_array")
                     if video_recorder is not None:
                         video_recorder.add_frame(rendered_frame)
 
                 rewards_i.append(reward)
                 infos_i.append(info)
+                self.cav_pos.extend(info["agents_info"])
+                self.hdv_pos.extend(info["hdv_info"])
 
             vehicle_speed.append(info["vehicle_speed"])
             vehicle_position.append(info["vehicle_position"])
@@ -322,6 +330,7 @@ class MAPPO:
             infos.append(infos_i)
             steps.append(step)
             avg_speeds.append(avg_speed / step)
+            # self.debug_vehicle_position()
 
         if video_recorder is not None:
             video_recorder.release()
@@ -401,7 +410,7 @@ def create_scatter_plot(cav, hdv, title="Positions"):
     plt.scatter(cav[:, 0], cav[:, 1], label='CAV', color='red', alpha=0.5)
 
     # Create a scatter plot for the hdv
-    plt.scatter(hdv[:, 0], hdv[:, 1], label='HDV', color='blue', alpha=0.5)
+    # plt.scatter(hdv[:, 0], hdv[:, 1], label='HDV', color='blue', alpha=0.5)
 
     # Add labels and a legend
     plt.xlabel('X-pos')

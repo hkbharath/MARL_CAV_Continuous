@@ -1,4 +1,4 @@
-from MARL.MAPPO import MAPPO
+from MAPPO import MAPPO
 from common.utils import agg_double_list, copy_file_ppo, init_dir
 import sys
 sys.path.append("../highway-env")
@@ -20,7 +20,7 @@ def parse_args():
         + seed = 0
     """
     default_base_dir = "./results/"
-    default_config_dir = 'configs/configs_ppo_continuous.ini'
+    default_config_dir = 'configs/configs_ppo.ini'
     parser = argparse.ArgumentParser(description=('Train or evaluate policy on RL environment '
                                                   'using mappo'))
     parser.add_argument('--base-dir', type=str, required=False,
@@ -85,11 +85,12 @@ def train(args):
     env.config['simulation_frequency'] = config.getint('ENV_CONFIG', 'simulation_frequency')
     env.config['duration'] = config.getint('ENV_CONFIG', 'duration')
     env.config['policy_frequency'] = config.getint('ENV_CONFIG', 'policy_frequency')
-    env.config['COLLISION_REWARD'] = config.getint('ENV_CONFIG', 'COLLISION_REWARD')
+    env.config['COLLISION_COST'] = config.getint('ENV_CONFIG', 'COLLISION_COST')
     env.config['HIGH_SPEED_REWARD'] = config.getint('ENV_CONFIG', 'HIGH_SPEED_REWARD')
     env.config['HEADWAY_COST'] = config.getint('ENV_CONFIG', 'HEADWAY_COST')
     env.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
-    env.config['MERGING_LANE_COST'] = config.getint('ENV_CONFIG', 'MERGING_LANE_COST')
+    env.config['LONGITUDINAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
+    env.config['LATERAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_REWARD')
     env.config['traffic_density'] = config.getint('ENV_CONFIG', 'traffic_density')
     traffic_density = config.getint('ENV_CONFIG', 'traffic_density')
     env.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
@@ -101,11 +102,12 @@ def train(args):
     env_eval.config['simulation_frequency'] = config.getint('ENV_CONFIG', 'simulation_frequency')
     env_eval.config['duration'] = config.getint('ENV_CONFIG', 'duration')
     env_eval.config['policy_frequency'] = config.getint('ENV_CONFIG', 'policy_frequency')
-    env_eval.config['COLLISION_REWARD'] = config.getint('ENV_CONFIG', 'COLLISION_REWARD')
+    env_eval.config['COLLISION_COST'] = config.getint('ENV_CONFIG', 'COLLISION_COST')
     env_eval.config['HIGH_SPEED_REWARD'] = config.getint('ENV_CONFIG', 'HIGH_SPEED_REWARD')
     env_eval.config['HEADWAY_COST'] = config.getint('ENV_CONFIG', 'HEADWAY_COST')
     env_eval.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
-    env_eval.config['MERGING_LANE_COST'] = config.getint('ENV_CONFIG', 'MERGING_LANE_COST')
+    env_eval.config['LONGITUDINAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
+    env_eval.config['LATERAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_REWARD')
     env_eval.config['traffic_density'] = config.getint('ENV_CONFIG', 'traffic_density')
     env_eval.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
 
@@ -122,8 +124,8 @@ def train(args):
                   target_update_steps=TARGET_UPDATE_STEPS, target_tau=TARGET_TAU,
                   reward_gamma=reward_gamma, reward_type=reward_type,
                   max_grad_norm=MAX_GRAD_NORM, test_seeds=test_seeds,
-                  episodes_before_train=EPISODES_BEFORE_TRAIN, traffic_density=traffic_density
-                  )
+                  episodes_before_train=EPISODES_BEFORE_TRAIN, traffic_density=traffic_density,
+                  render=False)
 
     # load the model if exist
     mappo.load(model_dir, train_mode=True)
@@ -185,16 +187,17 @@ def evaluate(args):
     reward_scale = config.getfloat('TRAIN_CONFIG', 'reward_scale')
 
     # init env
-    env = gym.make('merge-multi-agent-v0')
+    env = gym.make(args.env_name)
     env.config['seed'] = config.getint('ENV_CONFIG', 'seed')
     env.config['simulation_frequency'] = config.getint('ENV_CONFIG', 'simulation_frequency')
     env.config['duration'] = config.getint('ENV_CONFIG', 'duration')
     env.config['policy_frequency'] = config.getint('ENV_CONFIG', 'policy_frequency')
-    env.config['COLLISION_REWARD'] = config.getint('ENV_CONFIG', 'COLLISION_REWARD')
+    env.config['COLLISION_COST'] = config.getint('ENV_CONFIG', 'COLLISION_COST')
     env.config['HIGH_SPEED_REWARD'] = config.getint('ENV_CONFIG', 'HIGH_SPEED_REWARD')
     env.config['HEADWAY_COST'] = config.getint('ENV_CONFIG', 'HEADWAY_COST')
     env.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
-    env.config['MERGING_LANE_COST'] = config.getint('ENV_CONFIG', 'MERGING_LANE_COST')
+    env.config['LONGITUDINAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
+    env.config['LATERAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_REWARD')
     env.config['traffic_density'] = config.getint('ENV_CONFIG', 'traffic_density')
     traffic_density = config.getint('ENV_CONFIG', 'traffic_density')
     env.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
@@ -214,8 +217,8 @@ def evaluate(args):
                   target_update_steps=TARGET_UPDATE_STEPS, target_tau=TARGET_TAU,
                   reward_gamma=reward_gamma, reward_type=reward_type,
                   max_grad_norm=MAX_GRAD_NORM, test_seeds=test_seeds,
-                  episodes_before_train=EPISODES_BEFORE_TRAIN, traffic_density=traffic_density
-                  )
+                  episodes_before_train=EPISODES_BEFORE_TRAIN, traffic_density=traffic_density,
+                  render=True)
 
     # load the model if exist
     mappo.load(model_dir, train_mode=False)

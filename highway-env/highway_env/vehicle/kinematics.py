@@ -211,6 +211,17 @@ class Vehicle(object):
         # Derive it in specific class
         return action
     
+    def check_on_road(self) -> None:
+        """
+        Check if the vehicle on its current lane laterally
+        """
+        _, lateral = self.lane.local_coordinates(self.position)
+        on_lane = self.lane.on_lane(self.position, longitudinal=0, lateral=lateral)
+        if not on_lane:
+            self.speed = min([self.speed, 0], key=abs)
+            self.crashed = True
+
+
     @property
     def direction(self) -> np.ndarray:
         return np.array([np.cos(self.heading), np.sin(self.heading)])
@@ -235,8 +246,8 @@ class Vehicle(object):
             return np.zeros((2,))
 
     @property
-    def on_road(self) -> bool:
-        """ Is the vehicle on its current lane, or off-road ? """
+    def on_road(self, lateral_only = True) -> bool:
+        """ Check if the vehicle on its current lane"""
         return self.lane.on_lane(self.position)
 
     def front_distance_to(self, other: "Vehicle") -> float:

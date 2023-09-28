@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from highway_env.road.road import Road
 from highway_env.types import Vector
 from highway_env.vehicle.kinematics import Vehicle
+from highway_env import utils
 
 
 class BicycleVehicle(Vehicle):
@@ -191,10 +192,22 @@ class BicycleVehicle(Vehicle):
         A = A0 + np.tensordot(self.theta, phi, axes=[0, 0])
         return A, B
 
+class ControlledBicycleVehicle(BicycleVehicle):
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.target_lane = self.lane
+
     def _preprocess_action(self, action):
-        action["acceleration"] = self.MAX_ACCELERATION * action["acceleration"]
-        action["steering"] = self.MAX_STEERING_ANGLE * action["steering"]
+        action["acceleration"] = utils.lmap(action["acceleration"], [0, 1], [-self.MAX_ACCELERATION, self.MAX_ACCELERATION])   
+        if action["steering"] != 0:
+            action["steering"] = utils.lmap(action["steering"], [0, 1], [-self.MAX_STEERING_ANGLE, self.MAX_STEERING_ANGLE])
         return action
+    
+    def set_target_lane(self, lane_index: int) -> None:
+        if self.road:
+            _from, _to, id = self.lane_index
+            target_lane_index = (_from, _to, lane_index)
+            self.target_lane = self.road.network.get_lane(target_lane_index)
 
 def simulate(dt: float = 0.1) -> None:
     import control

@@ -287,6 +287,7 @@ class Road(object):
                 vehicle.check_collision(other)
             for other in self.objects:
                 vehicle.check_collision(other)
+            vehicle.check_on_road()
 
     def surrounding_vehicles(self, vehicle: 'kinematics.Vehicle', lane_index: LaneIndex = None) \
             -> Tuple[Optional['kinematics.Vehicle'], Optional['kinematics.Vehicle']]:

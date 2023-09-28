@@ -90,7 +90,7 @@ def train(args):
     env.config['HEADWAY_COST'] = config.getint('ENV_CONFIG', 'HEADWAY_COST')
     env.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
     env.config['LONGITUDINAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
-    env.config['LATERAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_REWARD')
+    env.config['LATERAL_MOTION_COST'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_COST')
     env.config['traffic_density'] = config.getint('ENV_CONFIG', 'traffic_density')
     traffic_density = config.getint('ENV_CONFIG', 'traffic_density')
     env.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
@@ -107,7 +107,7 @@ def train(args):
     env_eval.config['HEADWAY_COST'] = config.getint('ENV_CONFIG', 'HEADWAY_COST')
     env_eval.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
     env_eval.config['LONGITUDINAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
-    env_eval.config['LATERAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_REWARD')
+    env_eval.config['LATERAL_MOTION_COST'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_COST')
     env_eval.config['traffic_density'] = config.getint('ENV_CONFIG', 'traffic_density')
     env_eval.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
 
@@ -153,6 +153,7 @@ def train(args):
     plt.xlabel("Episode")
     plt.ylabel("Average Reward")
     plt.legend(["MAPPO"])
+    plt.savefig(output_dir + '/RewardCurve.png', bbox_inches='tight')
     plt.show()
 
 
@@ -197,7 +198,7 @@ def evaluate(args):
     env.config['HEADWAY_COST'] = config.getint('ENV_CONFIG', 'HEADWAY_COST')
     env.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
     env.config['LONGITUDINAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
-    env.config['LATERAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_REWARD')
+    env.config['LATERAL_MOTION_COST'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_COST')
     env.config['traffic_density'] = config.getint('ENV_CONFIG', 'traffic_density')
     traffic_density = config.getint('ENV_CONFIG', 'traffic_density')
     env.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
@@ -218,7 +219,8 @@ def evaluate(args):
                   reward_gamma=reward_gamma, reward_type=reward_type,
                   max_grad_norm=MAX_GRAD_NORM, test_seeds=test_seeds,
                   episodes_before_train=EPISODES_BEFORE_TRAIN, traffic_density=traffic_density,
-                  render=True)
+                  render=True,
+                  optimizer_type="adam")
 
     # load the model if exist
     mappo.load(model_dir, train_mode=False)

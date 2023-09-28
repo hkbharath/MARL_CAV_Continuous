@@ -8,7 +8,7 @@ from highway_env.envs.common.abstract import AbstractEnv
 from highway_env.envs.common.action import Action
 from highway_env.road.road import Road, RoadNetwork
 from highway_env.road.lane import AbstractLane
-from highway_env.vehicle.dynamics import BicycleVehicle
+from highway_env.vehicle.dynamics import ControlledBicycleVehicle
 from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.kinematics import Vehicle
 
@@ -27,7 +27,7 @@ class LaneChnageMARL(AbstractEnv):
                     "type": "MultiAgentAction",
                     "action_config": {
                         "type": "ContinuousAction",
-                        "lateral": True,
+                        "lateral": False,
                         "longitudinal": True,
                         "dynamical": True,
                     },
@@ -40,7 +40,7 @@ class LaneChnageMARL(AbstractEnv):
                 "controlled_vehicles": 5,
                 "safety_guarantee": False,
                 "action_masking": False,
-                "target_lane": 0,
+                "target_lane": 1,
                 "initial_lane_id": 1,
                 "length": 300,
                 "screen_width": 1200,
@@ -67,7 +67,7 @@ class LaneChnageMARL(AbstractEnv):
             self._agent_reward(action, vehicle) for vehicle in self.controlled_vehicles
         ) / len(self.controlled_vehicles)
 
-    def _agent_reward(self, action: int, vehicle: Vehicle) -> float:
+    def _agent_reward(self, action: int, vehicle: ControlledBicycleVehicle) -> float:
         """
         The first vehicle is rewarded for 
             - moving towards the middle of target lane,
@@ -90,14 +90,8 @@ class LaneChnageMARL(AbstractEnv):
         
         # reward for moving towards the middle of target lane
         # Optimal reward 0
-        target_lane_index = ("0", "1", self.config["target_lane"])
-        if vehicle == self.controlled_vehicles[0]:
-            target_lane = self.road.network.get_lane(target_lane_index)
-            lane_coords = target_lane.local_coordinates(self.vehicle.position)
-            dy = abs(vehicle.position[1] - lane_coords[1])
-            dy_s = utils.lmap(dy, [0, 0.5* AbstractLane.DEFAULT_WIDTH], [0, 1])
-        else:
-            dy_s = 0
+        lon, lat = vehicle.target_lane.local_coordinates(vehicle.position)
+        dy_s = utils.lmap(abs(lat), [0, vehicle.target_lane.width_at(lon)/2], [0, 1])
 
         # the optimal reward is 1
         speed_s = utils.lmap(
@@ -112,16 +106,13 @@ class LaneChnageMARL(AbstractEnv):
             else 0
         )
 
-        # is on the road
-        is_off_lane = 1 - self.is_vehicle_on_road(vehicle)
-
         # compute overall reward
         reward = (
-            self.config["LATERAL_MOTION_REWARD"] * dy_s
+            self.config["LATERAL_MOTION_COST"] * -1 * dy_s
             + self.config["LONGITUDINAL_MOTION_REWARD"] * dx_s
             + self.config["HIGH_SPEED_REWARD"] * speed_s
             + self.config["HEADWAY_COST"] * (headway_cost if headway_cost < 0 else 0)
-            + self.config["COLLISION_COST"] * (-1 * (vehicle.crashed + is_off_lane))
+            + self.config["COLLISION_COST"] * (-1 * (vehicle.crashed))
         )
         return reward
 
@@ -133,6 +124,7 @@ class LaneChnageMARL(AbstractEnv):
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, dict]:
         agent_info = []
         local_info = []
+
         obs, reward, done, info = super().step(action)
         info["agents_dones"] = tuple(
             self._agent_is_terminal(vehicle) for vehicle in self.controlled_vehicles
@@ -164,15 +156,13 @@ class LaneChnageMARL(AbstractEnv):
     
     def _cost(self, action: int) -> float:
         """The cost signal is the occurrence of collision."""
-        return float(any(vehicle.on_road is False for vehicle in self.controlled_vehicles) 
-                     and any(self.is_vehicle_on_road(vehicle) is False for vehicle in self.controlled_vehicles))
+        return float(any(vehicle.crashed is False for vehicle in self.controlled_vehicles) )
     
     def _is_terminal(self) -> bool:
         """The episode is over when a collision occurs or when the access ramp has been passed."""
         return (
             any(vehicle.crashed for vehicle in self.controlled_vehicles)
             or self.steps >= self.config["duration"] * self.config["policy_frequency"]
-            or any(self.is_vehicle_on_road(vehicle) is False for vehicle in self.controlled_vehicles)
         )
 
     def _agent_is_terminal(self, vehicle: Vehicle) -> bool:
@@ -180,7 +170,6 @@ class LaneChnageMARL(AbstractEnv):
         return (
             vehicle.crashed
             or self.steps >= self.config["duration"] * self.config["policy_frequency"]
-            or not self.is_vehicle_on_road(vehicle)
         )
     
     def _create_vehicles(self) -> None:
@@ -205,12 +194,13 @@ class LaneChnageMARL(AbstractEnv):
         # Spwan in lane other than target lane
         lc_vehicle_spwan_lane = (target_lane_index + 1) % lane_count
         lc_vehicle = self.action_type.vehicle_class(
-                road,
-                road.network.get_lane(("0", "1", lc_vehicle_spwan_lane)).position(
+                road = road,
+                position = road.network.get_lane(("0", "1", lc_vehicle_spwan_lane)).position(
                     lc_vehicle_spwan, 0
                 ),
-                speed=initial_speed.pop(0),
+                speed = initial_speed.pop(0),
             )
+        lc_vehicle.set_target_lane(target_lane_index)
         self.controlled_vehicles.append(lc_vehicle)
         road.vehicles.append(lc_vehicle)
 
@@ -226,15 +216,24 @@ class LaneChnageMARL(AbstractEnv):
         for idx in range(n_follow_vehicle):
             lane_id = idx % lane_count
             lane_follow_vehicle = self.action_type.vehicle_class(
-                road,
-                road.network.get_lane(("0", "1", lane_id)).position(
+                road = road,
+                position = road.network.get_lane(("0", "1", lane_id)).position(
                     spawn_points.pop(0), 0
                 ),
-                speed=initial_speed.pop(0),
+                speed = initial_speed.pop(0),
             )
             self.controlled_vehicles.append(lane_follow_vehicle)
             road.vehicles.append(lane_follow_vehicle)
-        
+
+    def define_spaces(self) -> None:
+        """
+        Define spaces of agents and observations
+        """
+        super().define_spaces()
+        # enable only first CAV to move laterally
+        if len(self.action_type.agents_action_types) > 0:
+            self.action_type.agents_action_types[0].lateral = True
+
     def is_vehicle_on_road(self, vehicle: Vehicle) -> bool:
         if vehicle.position[0] <= 0.0:
             return False

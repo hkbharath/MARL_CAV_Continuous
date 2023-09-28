@@ -6,9 +6,9 @@ import pygame
 import time
 
 from highway_env.types import Vector
-from highway_env.vehicle.dynamics import BicycleVehicle
+from highway_env.vehicle.dynamics import BicycleVehicle, ControlledBicycleVehicle
 from highway_env.vehicle.kinematics import Vehicle
-from highway_env.vehicle.controller import ControlledVehicle, MDPVehicle
+from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.behavior import IDMVehicle, LinearVehicle
 
 if TYPE_CHECKING:
@@ -42,9 +42,10 @@ class VehicleGraphics(object):
         if not surface.is_visible(vehicle.position):
             return
 
-        if type(vehicle) is BicycleVehicle or type(vehicle) is Vehicle:
-            print("position {} is visible".format(vehicle.position))
-            time.sleep(0.5)
+        if isinstance(vehicle, BicycleVehicle):
+            # print("vehicle position {}".format(vehicle.position))
+            # print("Lane coordinates {}\n".format(vehicle.lane.local_coordinates(vehicle.position)))
+            time.sleep(0.25)
 
         v = vehicle
         tire_length, tire_width = 1, 0.3
@@ -57,7 +58,7 @@ class VehicleGraphics(object):
         pygame.draw.rect(vehicle_surface, cls.BLACK, rect, 1)
 
         # Tires
-        if type(vehicle) in [Vehicle, BicycleVehicle]:
+        if type(vehicle) in [Vehicle, BicycleVehicle, ControlledBicycleVehicle]:
             tire_positions = [[surface.pix(tire_length), surface.pix(length / 2 - v.WIDTH / 2)],
                               [surface.pix(tire_length), surface.pix(length / 2 + v.WIDTH / 2)],
                               [surface.pix(length - tire_length), surface.pix(length / 2 - v.WIDTH / 2)],
@@ -156,7 +157,7 @@ class VehicleGraphics(object):
             color = cls.YELLOW
         elif isinstance(vehicle, IDMVehicle):
             color = cls.GREEN
-        elif isinstance(vehicle, MDPVehicle) or isinstance(vehicle, BicycleVehicle):
+        elif isinstance(vehicle, MDPVehicle) or isinstance(vehicle, ControlledBicycleVehicle):
             color = cls.EGO_COLOR
         if transparent:
             color = (color[0], color[1], color[2], 30)

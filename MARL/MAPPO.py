@@ -31,7 +31,7 @@ class MAPPO:
                  target_update_steps=5, clip_param=0.2,
                  reward_gamma=0.99, reward_scale=20,
                  actor_hidden_size=128, critic_hidden_size=128,
-                 actor_output_act=nn.functional.hardtanh, critic_loss="mse",
+                 actor_output_act=th.sigmoid, critic_loss="mse",
                  actor_lr=0.0001, critic_lr=0.0001, test_seeds=0,
                  optimizer_type="rmsprop", entropy_reg=0.01,
                  max_grad_norm=0.5, batch_size=100, episodes_before_train=100,
@@ -152,7 +152,7 @@ class MAPPO:
             self.hdv_pos = []
         else:
             self.episode_done = False
-            final_action = self.action(final_state)
+            final_action = self.action(final_state, self.n_agents)
             final_value = self.value(final_state, final_action)
 
         if self.reward_scale > 0:
@@ -213,44 +213,43 @@ class MAPPO:
             self._soft_update_target(self.critic_target, self.critic)
 
     # predict softmax action based on state
-    def _softmax_action(self, state, n_agents):
+    def _continuous_action(self, state, n_agents):
         state_var = to_tensor_var([state], self.use_cuda)
 
-        softmax_action = []
+        continuous_action = []
         for agent_id in range(n_agents):
-            softmax_action_var = th.exp(self.actor(state_var[:, agent_id, :]))
+            # continuous_action_var = th.exp(self.actor(state_var[:, agent_id, :]))
+            continuous_action_var = self.actor(state_var[:, agent_id, :])
             
             if self.use_cuda:
-                softmax_action.append(softmax_action_var.data.cpu().numpy()[0])
+                continuous_action.append(continuous_action_var.data.cpu().numpy()[0])
             else:
-                softmax_action.append(softmax_action_var.data.numpy()[0])
-        return softmax_action
+                continuous_action.append(continuous_action_var.data.numpy()[0])
+        return continuous_action
 
     # choose an action based on state with random noise added for exploration in training
     def exploration_action(self, state, n_agents):
-        softmax_actions = self._softmax_action(state, n_agents)
+        continuous_actions = self._continuous_action(state, n_agents)
         actions = []
-        for pi in softmax_actions:
-            noise = np.random.choice([-0.01, 0.01])*np.random.randn(*pi.shape)
+        for pi in continuous_actions:
+            noise = np.random.randn(*pi.shape)
             actions.append(pi + noise)
         return actions
 
     # choose an action based on state for execution
     def action(self, state, n_agents):
-        softmax_actions = self._softmax_action(state, n_agents)
+        continuous_actions = self._continuous_action(state, n_agents)
         actions = []
         # very mild noise for variability
-        for pi in softmax_actions:
-            noise = np.random.choice([-0.0001, 0.0001])*np.random.randn(*pi.shape)
-            actions.append(pi + noise)
-        # for idx in range(len(actions)):
-        #     actions[idx] = np.zeros(actions[idx].shape)
+        for pi in continuous_actions:
+            noise = np.random.choice([-0.01, 0.01])*np.random.randn(*pi.shape)
+            actions.append(pi) # Add noise to test
         return actions
 
     # evaluate value for a state-action pair
     def value(self, state, action):
         state_var = to_tensor_var([state], self.use_cuda)
-        action = index_to_one_hot(action, self.action_dim)
+        # action = index_to_one_hot(action, self.action_dim)
         action_var = to_tensor_var([action], self.use_cuda)
 
         values = [0] * self.n_agents
@@ -308,11 +307,17 @@ class MAPPO:
                     video_recorder.add_frame(rendered_frame)
                 else:
                     video_recorder = None
-
+            actions = []
             while not done:
                 step += 1
                 action = self.action(state, n_agents)
+                # for idx in range(len(actions)):
+                #     actions[idx] = np.zeros(actions[idx].shape)
+                # print(action)
+                actions.append(action)
                 state, reward, done, info = env.step(action)
+                # print(reward)
+                # print(info)
                 avg_speed += info["average_speed"]
                 if self.render:
                     rendered_frame = env.render(mode="rgb_array")
@@ -331,6 +336,7 @@ class MAPPO:
             steps.append(step)
             avg_speeds.append(avg_speed / step)
             # self.debug_vehicle_position()
+            # create_action_distribution(np.array(actions).reshape(-1, 2))
 
         if video_recorder is not None:
             video_recorder.release()
@@ -370,7 +376,8 @@ class MAPPO:
                 save_file = 'checkpoint-{:d}.pt'.format(global_step)
         if save_file is not None:
             file_path = model_dir + save_file
-            checkpoint = th.load(file_path)
+            checkpoint = th.load(file_path, 
+                                 map_location=th.device('cuda' if self.use_cuda else 'cpu'))
             print('Checkpoint loaded: {}'.format(file_path))
             self.actor.load_state_dict(checkpoint['model_state_dict'])
             if train_mode:
@@ -403,6 +410,15 @@ class MAPPO:
 
         plt.tight_layout() 
         plt.show()
+
+def create_action_distribution(actions):
+    plt.title("Actions")
+    # plt.hist(actions[:0], bins=100, range=(0, 100), color='red', label='acceleration', alpha=0.5)
+    plt.hist(actions, bins=100, range=(0, 1), color=["red", "blue"], label=['acceleration','steering'], alpha=0.5)
+    plt.xlabel('Action')
+    plt.ylabel('Frequency')
+    plt.legend()
+    plt.show()
 
 def create_scatter_plot(cav, hdv, title="Positions"):
     plt.title(title)

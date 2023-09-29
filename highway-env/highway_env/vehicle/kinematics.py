@@ -117,7 +117,7 @@ class Vehicle(object):
         :param action: the input action
         """
         if action:
-            self.action = self._preprocess_action(action)
+            self.action = action
 
     def step(self, dt: float) -> None:
         """
@@ -206,10 +206,6 @@ class Vehicle(object):
         return utils.rotated_rectangles_intersect((self.position, 0.9 * self.LENGTH, 0.9 * self.WIDTH, self.heading),
                                                   (
                                                   other.position, 0.9 * other.LENGTH, 0.9 * other.WIDTH, other.heading))
-
-    def _preprocess_action(self, action):
-        # Derive it in specific class
-        return action
     
     def check_on_road(self) -> None:
         """

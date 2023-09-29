@@ -43,9 +43,9 @@ class VehicleGraphics(object):
             return
 
         if isinstance(vehicle, BicycleVehicle):
-            # print("vehicle position {}".format(vehicle.position))
+            print("vehicle heading {}".format(vehicle.heading))
             # print("Lane coordinates {}\n".format(vehicle.lane.local_coordinates(vehicle.position)))
-            time.sleep(0.25)
+            # time.sleep(0.25)
 
         v = vehicle
         tire_length, tire_width = 1, 0.3

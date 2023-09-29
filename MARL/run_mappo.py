@@ -11,7 +11,7 @@ import argparse
 import configparser
 import os
 from datetime import datetime
-
+import torch as th
 
 def parse_args():
     """
@@ -91,8 +91,7 @@ def train(args):
     env.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
     env.config['LONGITUDINAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
     env.config['LATERAL_MOTION_COST'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_COST')
-    env.config['traffic_density'] = config.getint('ENV_CONFIG', 'traffic_density')
-    traffic_density = config.getint('ENV_CONFIG', 'traffic_density')
+    env.config['target_lane'] = config.getboolean('ENV_CONFIG', 'target_lane')
     env.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
 
     assert env.T % ROLL_OUT_N_STEPS == 0
@@ -108,7 +107,7 @@ def train(args):
     env_eval.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
     env_eval.config['LONGITUDINAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
     env_eval.config['LATERAL_MOTION_COST'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_COST')
-    env_eval.config['traffic_density'] = config.getint('ENV_CONFIG', 'traffic_density')
+    env.config['target_lane'] = config.getboolean('ENV_CONFIG', 'target_lane')
     env_eval.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
 
     state_dim = env.n_s
@@ -121,10 +120,11 @@ def train(args):
                   roll_out_n_steps=ROLL_OUT_N_STEPS,
                   actor_hidden_size=actor_hidden_size, critic_hidden_size=critic_hidden_size,
                   actor_lr=actor_lr, critic_lr=critic_lr, reward_scale=reward_scale,
+                  actor_output_act=th.tanh,
                   target_update_steps=TARGET_UPDATE_STEPS, target_tau=TARGET_TAU,
                   reward_gamma=reward_gamma, reward_type=reward_type,
                   max_grad_norm=MAX_GRAD_NORM, test_seeds=test_seeds,
-                  episodes_before_train=EPISODES_BEFORE_TRAIN, traffic_density=traffic_density,
+                  episodes_before_train=EPISODES_BEFORE_TRAIN,
                   render=False)
 
     # load the model if exist
@@ -199,9 +199,9 @@ def evaluate(args):
     env.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
     env.config['LONGITUDINAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
     env.config['LATERAL_MOTION_COST'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_COST')
-    env.config['traffic_density'] = config.getint('ENV_CONFIG', 'traffic_density')
-    traffic_density = config.getint('ENV_CONFIG', 'traffic_density')
+    env.config['target_lane'] = config.getboolean('ENV_CONFIG', 'target_lane')
     env.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
+    
 
     assert env.T % ROLL_OUT_N_STEPS == 0
     state_dim = env.n_s
@@ -218,13 +218,17 @@ def evaluate(args):
                   target_update_steps=TARGET_UPDATE_STEPS, target_tau=TARGET_TAU,
                   reward_gamma=reward_gamma, reward_type=reward_type,
                   max_grad_norm=MAX_GRAD_NORM, test_seeds=test_seeds,
-                  episodes_before_train=EPISODES_BEFORE_TRAIN, traffic_density=traffic_density,
+                  episodes_before_train=EPISODES_BEFORE_TRAIN,
                   render=True,
+                  actor_output_act=th.tanh,
                   optimizer_type="adam")
 
     # load the model if exist
     mappo.load(model_dir, train_mode=False)
     rewards, _, steps, avg_speeds = mappo.evaluation(env, video_dir, len(seeds), is_train=False)
+
+    rewards_mu, rewards_std = agg_double_list(rewards)
+    print("Episode %d, Average Reward %.2f" % (mappo.n_episodes + 1, rewards_mu))
 
 
 if __name__ == "__main__":

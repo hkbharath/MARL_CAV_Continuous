@@ -196,12 +196,6 @@ class ControlledBicycleVehicle(BicycleVehicle):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.target_lane = self.lane
-
-    def _preprocess_action(self, action):
-        action["acceleration"] = utils.lmap(action["acceleration"], [0, 1], [-self.MAX_ACCELERATION, self.MAX_ACCELERATION])   
-        if action["steering"] != 0:
-            action["steering"] = utils.lmap(action["steering"], [0, 1], [-self.MAX_STEERING_ANGLE, self.MAX_STEERING_ANGLE])
-        return action
     
     def set_target_lane(self, lane_index: int) -> None:
         if self.road:

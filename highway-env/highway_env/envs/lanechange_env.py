@@ -80,23 +80,27 @@ class LaneChnageMARL(AbstractEnv):
         :param action: the action performed
         :return: the reward of the state-action transition
         """
+        # Optimal reward 0
+
         last_pos = vehicle.position.copy()
         if len(vehicle.history) > 1:
             last_pos = vehicle.history.popleft()
         
         # reward for moving forward
         dx = vehicle.position[0] - last_pos[0]
-        dx_s = utils.lmap(dx, [0, vehicle.LENGTH], [0, 1])
+        dx_s = utils.lmap(dx, [0, vehicle.LENGTH], [-1, 0])
         
-        # reward for moving towards the middle of target lane
-        # Optimal reward 0
+        # cost for moving away from the target lane
         lon, lat = vehicle.target_lane.local_coordinates(vehicle.position)
-        dy_s = utils.lmap(abs(lat), [0, vehicle.target_lane.width_at(lon)/2], [0, 1])
+        # dy_s = utils.lmap(abs(lat), [0, vehicle.target_lane.width_at(lon)/2], [0, 1])
+        dy = np.clip(abs(lat), 0, vehicle.target_lane.width_at(lon))
+        lateral_cost = -np.exp(dy) + 1 # cost is 0 when vehicle is in the middle of the target lane
 
         # the optimal reward is 1
         speed_s = utils.lmap(
             vehicle.speed, self.config["reward_speed_range"], [0, 1]
         )
+        speed_s = np.clip(speed_s, 0, 1)
 
         # compute headway cost
         headway_distance = self._compute_headway_distance(vehicle)
@@ -105,14 +109,15 @@ class LaneChnageMARL(AbstractEnv):
             if vehicle.speed > 0
             else 0
         )
+        headway_cost = (headway_cost if headway_cost < 0 else 0)
 
         # compute overall reward
         reward = (
-            self.config["LATERAL_MOTION_COST"] * -1 * dy_s
-            + self.config["LONGITUDINAL_MOTION_REWARD"] * dx_s
+            self.config["LATERAL_MOTION_COST"] * lateral_cost
+            # + self.config["LONGITUDINAL_MOTION_REWARD"] * dx_s # it is redundant as we reward high speed
             + self.config["HIGH_SPEED_REWARD"] * speed_s
-            + self.config["HEADWAY_COST"] * (headway_cost if headway_cost < 0 else 0)
-            + self.config["COLLISION_COST"] * (-1 * (vehicle.crashed))
+            + self.config["HEADWAY_COST"] * headway_cost
+            + self.config["COLLISION_COST"] * (-1 * vehicle.crashed)
         )
         return reward
 

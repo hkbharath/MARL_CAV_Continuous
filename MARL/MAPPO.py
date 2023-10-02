@@ -232,7 +232,7 @@ class MAPPO:
         continuous_actions = self._continuous_action(state, n_agents)
         actions = []
         for pi in continuous_actions:
-            noise = np.random.randn(*pi.shape)
+            noise = 0.176 * np.random.randn(*pi.shape) # around 10 degree of noise for exploration
             actions.append(pi + noise)
         return actions
 
@@ -242,7 +242,7 @@ class MAPPO:
         actions = []
         # very mild noise for variability
         for pi in continuous_actions:
-            noise = np.random.choice([-0.01, 0.01])*np.random.randn(*pi.shape)
+            noise = 1e-4*np.random.randn(*pi.shape) # around 0.01 degree of noise
             actions.append(pi) # Add noise to test
         return actions
 

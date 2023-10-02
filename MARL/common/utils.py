@@ -126,6 +126,10 @@ def copy_file_ppo(tar_dir):
     c3 = 'single_agent/Model_common.py'
     copy(c3, tar_dir)
 
+    # save file defining the env
+    c4 = '../highway-env/highway_env/envs/lanechange_env.py'
+    copy(c4, tar_dir)
+
 
 def copy_file_akctr(tar_dir):
     # env = '.highway-env/envs/common/abstract.py'

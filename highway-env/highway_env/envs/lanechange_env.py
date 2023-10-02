@@ -92,9 +92,18 @@ class LaneChnageMARL(AbstractEnv):
         
         # cost for moving away from the target lane
         lon, lat = vehicle.target_lane.local_coordinates(vehicle.position)
-        # dy_s = utils.lmap(abs(lat), [0, vehicle.target_lane.width_at(lon)/2], [0, 1])
-        dy = np.clip(abs(lat), 0, vehicle.target_lane.width_at(lon))
-        lateral_cost = -np.exp(dy) + 1 # cost is 0 when vehicle is in the middle of the target lane
+        lateral_cost = -np.exp(abs(lat)) + 1 # cost is 0 when vehicle is in the middle of the target lane
+        # lateral_cost = -dy**2 # Option 2 slighly less cost for lateral position to allow smooth transision
+        
+        # add cost for not heading towards the direction of the target lane
+        heading_err = abs(vehicle.heading*5.09223 + lat) # 5.09223 is multiplication factor to equate penalty for 45 degrees heading to 4m off latral distance from target.
+        # according to above equation:
+        # heading ~ 0 when vehicle is heading in the direction of motion
+        # heading ~ 45 when vehicle is one lane way from target
+        # heading ~ 22.5 when vehicle is halfway from target
+        # print("heading {}".format(vehicle.heading))
+
+        heading_cost = -np.exp(heading_err) + 1 
 
         # the optimal reward is 1
         speed_s = utils.lmap(
@@ -114,11 +123,12 @@ class LaneChnageMARL(AbstractEnv):
         # compute overall reward
         reward = (
             self.config["LATERAL_MOTION_COST"] * lateral_cost
-            # + self.config["LONGITUDINAL_MOTION_REWARD"] * dx_s # it is redundant as we reward high speed
+            + self.config["LATERAL_MOTION_COST"] * heading_cost
             + self.config["HIGH_SPEED_REWARD"] * speed_s
             + self.config["HEADWAY_COST"] * headway_cost
             + self.config["COLLISION_COST"] * (-1 * vehicle.crashed)
         )
+        # print("Stepwise reward: {}".format(reward))
         return reward
 
     def _create_road(self) -> None:
@@ -198,6 +208,7 @@ class LaneChnageMARL(AbstractEnv):
         target_lane_index = self.config["target_lane"]
         # Spwan in lane other than target lane
         lc_vehicle_spwan_lane = (target_lane_index + 1) % lane_count
+        # lc_vehicle_spwan_lane = target_lane_index
         lc_vehicle = self.action_type.vehicle_class(
                 road = road,
                 position = road.network.get_lane(("0", "1", lc_vehicle_spwan_lane)).position(

@@ -12,6 +12,7 @@ import configparser
 import os
 from datetime import datetime
 import torch as th
+import time
 
 def parse_args():
     """
@@ -89,8 +90,8 @@ def train(args):
     env.config['HIGH_SPEED_REWARD'] = config.getint('ENV_CONFIG', 'HIGH_SPEED_REWARD')
     env.config['HEADWAY_COST'] = config.getint('ENV_CONFIG', 'HEADWAY_COST')
     env.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
-    env.config['LONGITUDINAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
-    env.config['LATERAL_MOTION_COST'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_COST')
+    env.config['LONGITUDINAL_MOTION_REWARD'] = config.getfloat('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
+    env.config['LATERAL_MOTION_COST'] = config.getfloat('ENV_CONFIG', 'LATERAL_MOTION_COST')
     env.config['target_lane'] = config.getboolean('ENV_CONFIG', 'target_lane')
     env.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
 
@@ -105,8 +106,8 @@ def train(args):
     env_eval.config['HIGH_SPEED_REWARD'] = config.getint('ENV_CONFIG', 'HIGH_SPEED_REWARD')
     env_eval.config['HEADWAY_COST'] = config.getint('ENV_CONFIG', 'HEADWAY_COST')
     env_eval.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
-    env_eval.config['LONGITUDINAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
-    env_eval.config['LATERAL_MOTION_COST'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_COST')
+    env_eval.config['LONGITUDINAL_MOTION_REWARD'] = config.getfloat('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
+    env_eval.config['LATERAL_MOTION_COST'] = config.getfloat('ENV_CONFIG', 'LATERAL_MOTION_COST')
     env.config['target_lane'] = config.getboolean('ENV_CONFIG', 'target_lane')
     env_eval.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
 
@@ -133,6 +134,8 @@ def train(args):
     env.unwrapped.seed = env.config['seed']
     eval_rewards = []
 
+    # track time
+    ts = time.time()
     while mappo.n_episodes < MAX_EPISODES:
         mappo.interact()
         if mappo.n_episodes >= EPISODES_BEFORE_TRAIN:
@@ -140,7 +143,7 @@ def train(args):
         if mappo.episode_done and ((mappo.n_episodes + 1) % EVAL_INTERVAL == 0):
             rewards, _, _, _ = mappo.evaluation(env_eval, dirs['train_videos'], EVAL_EPISODES)
             rewards_mu, rewards_std = agg_double_list(rewards)
-            print("Episode %d, Average Reward %.2f" % (mappo.n_episodes + 1, rewards_mu))
+            print("Episode %d, Average Reward %.2f, Execution time: %.2f s" % (mappo.n_episodes + 1, rewards_mu, (time.time() - ts)))
             eval_rewards.append(rewards_mu)
             # save the model
             mappo.save(dirs['models'], mappo.n_episodes + 1)
@@ -197,8 +200,8 @@ def evaluate(args):
     env.config['HIGH_SPEED_REWARD'] = config.getint('ENV_CONFIG', 'HIGH_SPEED_REWARD')
     env.config['HEADWAY_COST'] = config.getint('ENV_CONFIG', 'HEADWAY_COST')
     env.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
-    env.config['LONGITUDINAL_MOTION_REWARD'] = config.getint('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
-    env.config['LATERAL_MOTION_COST'] = config.getint('ENV_CONFIG', 'LATERAL_MOTION_COST')
+    env.config['LONGITUDINAL_MOTION_REWARD'] = config.getfloat('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
+    env.config['LATERAL_MOTION_COST'] = config.getfloat('ENV_CONFIG', 'LATERAL_MOTION_COST')
     env.config['target_lane'] = config.getboolean('ENV_CONFIG', 'target_lane')
     env.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
     

@@ -45,8 +45,9 @@ class LaneChnageMARL(AbstractEnv):
                 "length": 300,
                 "screen_width": 1200,
                 "screen_height": 100,
-                # "centering_position": [0, 4],
-                "scaling": 4,
+                "centering_position": [0.55, 0.5],
+                "scaling": 7,
+                # "scaling": 4,
                 "simulation_frequency": 15,  # [Hz]
                 "duration": 20,  # time step
                 "policy_frequency": 5,  # [Hz]
@@ -101,7 +102,7 @@ class LaneChnageMARL(AbstractEnv):
         # heading ~ 0 when vehicle is heading in the direction of motion
         # heading ~ 45 when vehicle is one lane way from target
         # heading ~ 22.5 when vehicle is halfway from target
-        # print("heading {}".format(vehicle.heading))
+        # print("heading {}, lateral: {}, heading_err: {}".format(vehicle.heading, lat, heading_err))
 
         heading_cost = -np.exp(heading_err) + 1 
 
@@ -120,13 +121,19 @@ class LaneChnageMARL(AbstractEnv):
         )
         headway_cost = (headway_cost if headway_cost < 0 else 0)
 
+        # reward for not colliding
+        # TODO: test this reward
+        # multliy steps/T with 5.311 to equate the cummulative reward of being alive to approximately 2000
+        alive_reward = np.exp(self.steps/self.T)
+
         # compute overall reward
         reward = (
-            self.config["LATERAL_MOTION_COST"] * lateral_cost
-            + self.config["LATERAL_MOTION_COST"] * heading_cost
+            # self.config["LATERAL_MOTION_COST"] * lateral_cost
+            self.config["LATERAL_MOTION_COST"] * heading_cost
             + self.config["HIGH_SPEED_REWARD"] * speed_s
             + self.config["HEADWAY_COST"] * headway_cost
             + self.config["COLLISION_COST"] * (-1 * vehicle.crashed)
+            + self.config["ALIVE_REWARD"] * alive_reward
         )
         # print("Stepwise reward: {}".format(reward))
         return reward
@@ -193,8 +200,11 @@ class LaneChnageMARL(AbstractEnv):
         road = self.road
         lane_count = self.config["lanes_count"]
         init_spawn_length = self.config["length"] / 3
-        lc_spawn_pos = init_spawn_length/2
         self.controlled_vehicles = []
+
+        lc_spawn_pos = init_spawn_length/2
+        # lc_spawn_pos = np.random.choice([-3, -2, -1, 0, 1, 2, 3]) * Vehicle.LENGTH + lc_spawn_pos
+        
 
         # initial speed with noise and location noise
         initial_speed = list (
@@ -203,16 +213,17 @@ class LaneChnageMARL(AbstractEnv):
 
 
         # Add first vehicle to perform lane change
-
-        lc_vehicle_spwan = lc_spawn_pos
         target_lane_index = self.config["target_lane"]
+        
         # Spwan in lane other than target lane
+        # lc_vehicle_spwan_lane = (target_lane_index + np.random.choice([0,1])) % lane_count
         lc_vehicle_spwan_lane = (target_lane_index + 1) % lane_count
         # lc_vehicle_spwan_lane = target_lane_index
+
         lc_vehicle = self.action_type.vehicle_class(
                 road = road,
                 position = road.network.get_lane(("0", "1", lc_vehicle_spwan_lane)).position(
-                    lc_vehicle_spwan, 0
+                    lc_spawn_pos, 0
                 ),
                 speed = initial_speed.pop(0),
             )
@@ -220,13 +231,17 @@ class LaneChnageMARL(AbstractEnv):
         self.controlled_vehicles.append(lc_vehicle)
         road.vehicles.append(lc_vehicle)
 
+        # print("LC Vehicle: Spawn lane: {}, Position: {}".format(lc_vehicle_spwan_lane, lc_vehicle.position))
+
         # Add autonomous vehicles to follow lane
         n_follow_vehicle = self.config["controlled_vehicles"] - 1
         spawn_points = np.random.rand(n_follow_vehicle)
-        spawn_points[:2] = spawn_points[:2] * lc_spawn_pos - Vehicle.LENGTH
-        spawn_points[2:] = Vehicle.LENGTH + lc_spawn_pos + spawn_points[2:] * (init_spawn_length - lc_spawn_pos)
-        # randomize the order of adding a vehicle
-        spawn_points = np.random.choice(spawn_points, n_follow_vehicle, replace=False)
+        # CAVs in behind
+        spawn_points[:2] = spawn_points[:2] * lc_spawn_pos - 2*Vehicle.LENGTH
+
+        # CAVs front
+        spawn_points[2:] = 2*Vehicle.LENGTH + lc_spawn_pos + spawn_points[2:] * (init_spawn_length - lc_spawn_pos)
+
         spawn_points = list(spawn_points)
 
         for idx in range(n_follow_vehicle):
@@ -240,6 +255,7 @@ class LaneChnageMARL(AbstractEnv):
             )
             self.controlled_vehicles.append(lane_follow_vehicle)
             road.vehicles.append(lane_follow_vehicle)
+            # print("Other Vehicles: Spawn lane: {}, Position: {}".format(lane_id, lane_follow_vehicle.position))
 
     def define_spaces(self) -> None:
         """

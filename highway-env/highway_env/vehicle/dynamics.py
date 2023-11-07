@@ -1,9 +1,10 @@
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from highway_env.road.road import Road
+from highway_env.road.lane import AbstractLane
 from highway_env.types import Vector
 from highway_env.vehicle.kinematics import Vehicle
 from highway_env import utils
@@ -193,6 +194,13 @@ class BicycleVehicle(Vehicle):
         return A, B
 
 class ControlledBicycleVehicle(BicycleVehicle):
+    
+    TAU_DS = 0.6  # [s]
+    PURSUIT_TAU = 0.5*TAU_DS  # [s]
+
+    KP_HEADING = 1 / TAU_DS
+    KP_LATERAL = 1/3 * KP_HEADING  # [1/s]
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.target_lane = self.lane
@@ -202,6 +210,45 @@ class ControlledBicycleVehicle(BicycleVehicle):
             _from, _to, id = self.lane_index
             target_lane_index = (_from, _to, lane_index)
             self.target_lane = self.road.network.get_lane(target_lane_index)
+
+    # def steering_control(self) -> float:
+    #     """
+    #     Steer the vehicle to follow the center of an given lane.
+
+    #     1. Lateral position is controlled by a proportional controller yielding a lateral speed command
+    #     2. Lateral speed command is converted to a heading reference
+    #     3. Heading is controlled by a proportional controller yielding a heading rate command
+    #     4. Heading rate command is converted to a steering angle
+
+    #     :param target_lane_index: index of the lane to follow
+    #     :return: a steering wheel angle command [rad]
+    #     """
+    #     target_lane = self.target_lane
+    #     lane_coords = target_lane.local_coordinates(self.position)
+    #     lane_next_coords = lane_coords[0] + self.speed * self.PURSUIT_TAU
+    #     lane_future_heading = target_lane.heading_at(lane_next_coords)
+
+    #     # Lateral position control
+    #     lateral_speed_command = - self.KP_LATERAL * lane_coords[1]
+    #     # Lateral speed to heading
+    #     heading_command = np.arcsin(np.clip(lateral_speed_command / utils.not_zero(self.speed), -1, 1))
+    #     heading_ref = lane_future_heading + np.clip(heading_command, -np.pi/4, np.pi/4)
+    #     # Heading control
+    #     heading_rate_command = self.KP_HEADING * utils.wrap_to_pi(heading_ref - self.heading)
+    #     # Heading rate to steering angle
+    #     steering_angle = np.arcsin(np.clip(self.LENGTH / 2 / utils.not_zero(self.speed) * heading_rate_command,
+    #                                        -1, 1))
+    #     steering_angle = np.clip(steering_angle, -self.MAX_STEERING_ANGLE, self.MAX_STEERING_ANGLE)
+    #     return float(steering_angle)
+    
+    # def act(self, action: Union[dict, str] = None) -> None:
+    #     if action:
+    #         if self.lane is self.target_lane:
+    #             action["steering"] = -1*action["steering"]
+    #         print("steering %f"%action["steering"])
+    #     super().act(action)
+    #     # self.action["steering"] = self.steering_control()
+
 
 def simulate(dt: float = 0.1) -> None:
     import control

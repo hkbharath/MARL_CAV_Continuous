@@ -297,22 +297,18 @@ class MDPVehicle(ControlledVehicle):
         return states
 
 class MDPContinuousVehicle(ControlledVehicle):
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.target_lane = self.lane
     
-    def __init__(self,
-                 road: Road,
-                 position: List[float],
-                 heading: float = 0,
-                 speed: float = 0,
-                 target_lane_index: LaneIndex = None,
-                 target_speed: float = None,
-                 route: Route = None) -> None:
-        super().__init__(road, position, heading, speed, target_lane_index, target_speed, route)
-        self.speed_index = self.speed_to_index(self.target_speed)
-        self.target_speed = self.index_to_speed(self.speed_index)
-
+    def set_target_lane(self, lane_index: int) -> None:
+        if self.road:
+            _from, _to, id = self.lane_index
+            target_lane_index = (_from, _to, lane_index)
+            self.target_lane = self.road.network.get_lane(target_lane_index)
+            self.target_lane_index = target_lane_index
+    
     def act(self, action: Union[dict, str] = None) -> None:
-        """
-        - Perform low-level control action based on the tuning parameter estimated by the algorithm.
-
-        :param action: a high-level action
-        """
+        # self.action["steering"] = self.steering_control(self.target_lane_index)
+        if action:
+            self.action = action

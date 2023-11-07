@@ -5,7 +5,7 @@ import numpy as np
 from highway_env import utils
 from highway_env.vehicle.dynamics import ControlledBicycleVehicle
 from highway_env.vehicle.kinematics import Vehicle
-from highway_env.vehicle.controller import MDPVehicle
+from highway_env.vehicle.controller import MDPVehicle, MDPContinuousVehicle
 
 if TYPE_CHECKING:
     from highway_env.envs.common.abstract import AbstractEnv
@@ -109,7 +109,7 @@ class ContinuousAction(ActionType):
 
     @property
     def vehicle_class(self) -> Callable:
-        return Vehicle if not self.dynamical else ControlledBicycleVehicle
+        return MDPContinuousVehicle if not self.dynamical else ControlledBicycleVehicle
 
     def act(self, action: np.ndarray) -> None:
         if self.clip:

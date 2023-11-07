@@ -337,6 +337,7 @@ class MAPPO:
             avg_speeds.append(avg_speed / step)
             # self.debug_vehicle_position()
             # create_action_distribution(np.array(actions).reshape(-1, 2))
+            # create_line_plot(np.array(rewards_i).reshape(-1, 1))
 
         if video_recorder is not None:
             video_recorder.release()
@@ -433,11 +434,20 @@ def create_scatter_plot(cav, hdv, title="Positions"):
     plt.ylabel('Y-pos')
     plt.legend()
 
-def create_line_plot(cav, hdv, title = "Speed"):
-    x = range(len(cav))
-    plt.plot(x, cav[:, 2], label='CAV', color='red', linestyle='-')
-    plt.plot(x, hdv[:, 2], label='HDV', color='blue', linestyle='-')
+# def create_line_plot(cav, hdv, title = "Speed"):
+#     x = range(len(cav))
+#     plt.plot(x, cav[:, 2], label='CAV', color='red', linestyle='-')
+#     plt.plot(x, hdv[:, 2], label='HDV', color='blue', linestyle='-')
+#     plt.title(title)
+#     plt.xlabel("Espisode")
+#     plt.ylabel("Speed")
+#     plt.legend()
+
+def create_line_plot(s, title = "Speed"):
+    x = range(len(s))
+    plt.plot(x, s, label='rewards', color='red', linestyle='-')
     plt.title(title)
     plt.xlabel("Espisode")
-    plt.ylabel("Speed")
+    plt.ylabel("Reward")
     plt.legend()
+    plt.show()

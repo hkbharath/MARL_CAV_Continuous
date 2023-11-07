@@ -37,6 +37,8 @@ def parse_args():
                         help="random seeds for evaluation, split by ,")
     parser.add_argument('--env-name', type=str, required=False,
                         default='merge-multi-agent-continuous-v0', help="environment name")
+    parser.add_argument('--checkpoint', type=int, required=False,
+                        default=0, help="checkpoint to load")
     args = parser.parse_args()
     return args
 
@@ -92,6 +94,7 @@ def train(args):
     env.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
     env.config['LONGITUDINAL_MOTION_REWARD'] = config.getfloat('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
     env.config['LATERAL_MOTION_COST'] = config.getfloat('ENV_CONFIG', 'LATERAL_MOTION_COST')
+    env.config['ALIVE_REWARD'] = config.getfloat('ENV_CONFIG', 'ALIVE_REWARD')
     env.config['target_lane'] = config.getboolean('ENV_CONFIG', 'target_lane')
     env.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
 
@@ -108,7 +111,8 @@ def train(args):
     env_eval.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
     env_eval.config['LONGITUDINAL_MOTION_REWARD'] = config.getfloat('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
     env_eval.config['LATERAL_MOTION_COST'] = config.getfloat('ENV_CONFIG', 'LATERAL_MOTION_COST')
-    env.config['target_lane'] = config.getboolean('ENV_CONFIG', 'target_lane')
+    env_eval.config['ALIVE_REWARD'] = config.getfloat('ENV_CONFIG', 'ALIVE_REWARD')
+    env_eval.config['target_lane'] = config.getboolean('ENV_CONFIG', 'target_lane')
     env_eval.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
 
     state_dim = env.n_s
@@ -136,6 +140,7 @@ def train(args):
 
     # track time
     ts = time.time()
+    print("\n\nExperiment: %s" % output_dir)
     while mappo.n_episodes < MAX_EPISODES:
         mappo.interact()
         if mappo.n_episodes >= EPISODES_BEFORE_TRAIN:
@@ -143,7 +148,7 @@ def train(args):
         if mappo.episode_done and ((mappo.n_episodes + 1) % EVAL_INTERVAL == 0):
             rewards, _, _, _ = mappo.evaluation(env_eval, dirs['train_videos'], EVAL_EPISODES)
             rewards_mu, rewards_std = agg_double_list(rewards)
-            print("Episode %d, Average Reward %.2f, Execution time: %.2f s" % (mappo.n_episodes + 1, rewards_mu, (time.time() - ts)))
+            print("Episode %d, Average Reward %.2f, Execution time: %.2f s" % (mappo.n_episodes + 1, rewards_mu, (time.time() - ts)), flush=True)
             eval_rewards.append(rewards_mu)
             # save the model
             mappo.save(dirs['models'], mappo.n_episodes + 1)
@@ -202,6 +207,7 @@ def evaluate(args):
     env.config['HEADWAY_TIME'] = config.getfloat('ENV_CONFIG', 'HEADWAY_TIME')
     env.config['LONGITUDINAL_MOTION_REWARD'] = config.getfloat('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
     env.config['LATERAL_MOTION_COST'] = config.getfloat('ENV_CONFIG', 'LATERAL_MOTION_COST')
+    env.config['ALIVE_REWARD'] = config.getfloat('ENV_CONFIG', 'ALIVE_REWARD', fallback=0.0)
     env.config['target_lane'] = config.getboolean('ENV_CONFIG', 'target_lane')
     env.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
     
@@ -227,7 +233,8 @@ def evaluate(args):
                   optimizer_type="adam")
 
     # load the model if exist
-    mappo.load(model_dir, train_mode=False)
+    checkpoint = args.checkpoint if args.checkpoint > 0 else None
+    mappo.load(model_dir, global_step=checkpoint, train_mode=False)
     rewards, _, steps, avg_speeds = mappo.evaluation(env, video_dir, len(seeds), is_train=False)
 
     rewards_mu, rewards_std = agg_double_list(rewards)

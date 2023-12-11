@@ -3,6 +3,8 @@ from typing import Sequence, Tuple
 
 import numpy as np
 
+from highway_env.road.lane import AbstractLane
+
 LaneIndex = Tuple[str, str, int]
 
 
@@ -18,14 +20,12 @@ class RoadObject(ABC):
     LENGTH = 2.0  # Object length [m]
     WIDTH = 2.0  # Object width [m]
 
-    def __init__(self, road, position: Sequence[float], speed: float = 0., heading: float = 0.):
+    def __init__(self, position: Sequence[float], speed: float = 0., heading: float = 0.):
         """
-        :param road: the road instance where the object is placed in
         :param position: cartesian position of object in the surface
         :param speed: cartesian speed of object in the surface
         :param heading: the angle from positive direction of horizontal axis
         """
-        self.road = road
         self.position = np.array(position, dtype=np.float)
         self.speed = speed
         self.heading = heading
@@ -33,7 +33,7 @@ class RoadObject(ABC):
         self.hit = False
 
     @classmethod
-    def make_on_lane(cls, road, lane_index: LaneIndex, longitudinal: float):
+    def make_on_lane(cls, lane: AbstractLane, longitudinal: float):
         """
         Create an object on a given lane at a longitudinal position.
 
@@ -42,8 +42,7 @@ class RoadObject(ABC):
         :param longitudinal: longitudinal position along the lane
         :return: An object with at the specified position
         """
-        lane = road.network.get_lane(lane_index)
-        return cls(road, lane.position(longitudinal, 0), lane.heading_at(longitudinal))
+        return cls(lane.position(longitudinal, lane.heading_at(longitudinal)))
 
     # Just added for sake of compatibility
     def to_dict(self, origin_vehicle=None, observe_intentions=True):

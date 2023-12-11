@@ -130,7 +130,7 @@ def train(args):
                   reward_gamma=reward_gamma, reward_type=reward_type,
                   max_grad_norm=MAX_GRAD_NORM, test_seeds=test_seeds,
                   episodes_before_train=EPISODES_BEFORE_TRAIN,
-                  render=False)
+                  render=True)
 
     # load the model if exist
     mappo.load(model_dir, train_mode=True)

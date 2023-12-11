@@ -201,7 +201,7 @@ class RoadNetwork(object):
         return [lane for to in self.graph.values() for ids in to.values() for lane in ids]
 
     @staticmethod
-    def straight_road_network(lanes: int = 4, length: float = 10000, angle: float = 0) -> 'RoadNetwork':
+    def straight_road_network(lanes: int = 4, length: float = 10000, angle: float = 0, min_speeds: List[float] = None, max_speeds: List[float] = None) -> 'RoadNetwork':
         net = RoadNetwork()
         for lane in range(lanes):
             origin = np.array([0, lane * StraightLane.DEFAULT_WIDTH])
@@ -211,7 +211,12 @@ class RoadNetwork(object):
             end = rotation @ end
             line_types = [LineType.CONTINUOUS_LINE if lane == 0 else LineType.STRIPED,
                           LineType.CONTINUOUS_LINE if lane == lanes - 1 else LineType.NONE]
-            net.add_lane("0", "1", StraightLane(origin, end, line_types=line_types))
+            new_lane = StraightLane(origin, end, line_types=line_types)
+            if max_speeds is not None and len(max_speeds) < lane:
+                new_lane.speed_limit = max_speeds[lane]
+            if min_speeds is not None and len(min_speeds) < lane:
+                new_lane.min_speed = min_speeds[lane]
+            net.add_lane("0", "1", new_lane)
         return net
 
     def position_heading_along_route(self, route: Route, longitudinal: float, lateral: float) \

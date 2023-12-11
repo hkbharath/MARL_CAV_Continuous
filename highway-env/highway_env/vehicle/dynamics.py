@@ -8,6 +8,7 @@ from highway_env.road.lane import AbstractLane
 from highway_env.types import Vector
 from highway_env.vehicle.kinematics import Vehicle
 from highway_env import utils
+from highway_env.road.objects import Landmark
 
 
 class BicycleVehicle(Vehicle):
@@ -204,12 +205,16 @@ class ControlledBicycleVehicle(BicycleVehicle):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.target_lane = self.lane
+        self.goal = None
     
     def set_target_lane(self, lane_index: int) -> None:
         if self.road:
             _from, _to, id = self.lane_index
             target_lane_index = (_from, _to, lane_index)
             self.target_lane = self.road.network.get_lane(target_lane_index)
+
+    def set_goal(self, goal: Landmark) -> None:
+        self.goal = goal
 
     # def steering_control(self) -> float:
     #     """

@@ -151,6 +151,7 @@ class StraightLane(AbstractLane):
         self.forbidden = forbidden
         self.priority = priority
         self.speed_limit = speed_limit
+        self.min_speed = 0
 
     def position(self, longitudinal: float, lateral: float) -> np.ndarray:
         return self.start + longitudinal * self.direction + lateral * self.direction_lateral

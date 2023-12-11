@@ -38,7 +38,7 @@ class MAPPO:
                  use_cuda=True, traffic_density=1, reward_type="global_R", render = False):
 
         assert traffic_density in [1, 2, 3]
-        assert reward_type in ["regionalR", "global_R"]
+        assert reward_type in ["regional_R", "global_R"]
         self.reward_type = reward_type
         self.env = env
         self.state_dim = state_dim
@@ -121,7 +121,7 @@ class MAPPO:
             actions.append(action)
             self.episode_rewards[-1] += global_reward
             self.epoch_steps[-1] += 1
-            if self.reward_type == "regionalR":
+            if self.reward_type == "regional_R":
                 reward = info["regional_rewards"]
             elif self.reward_type == "global_R":
                 reward = [global_reward] * self.n_agents
@@ -232,7 +232,7 @@ class MAPPO:
         continuous_actions = self._continuous_action(state, n_agents)
         actions = []
         for pi in continuous_actions:
-            noise = 0.176 * np.random.randn(*pi.shape) # around 10 degree of noise for exploration
+            noise = 0.5 * np.random.randn(*pi.shape)
             actions.append(pi + noise)
         return actions
 
@@ -242,8 +242,8 @@ class MAPPO:
         actions = []
         # very mild noise for variability
         for pi in continuous_actions:
-            noise = 1e-4*np.random.randn(*pi.shape) # around 0.01 degree of noise
-            actions.append(pi) # Add noise to test
+            noise = 0.01 * np.random.randn(*pi.shape)
+            actions.append(pi + noise) # Add noise to test
         return actions
 
     # evaluate value for a state-action pair

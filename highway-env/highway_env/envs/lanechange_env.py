@@ -11,7 +11,7 @@ from highway_env.road.lane import AbstractLane
 from highway_env.vehicle.dynamics import ControlledBicycleVehicle
 from highway_env.vehicle.controller import MDPVehicle
 from highway_env.vehicle.kinematics import Vehicle
-
+from highway_env.road.objects import Landmark
 
 class LaneChnageMARL(AbstractEnv):
 
@@ -37,6 +37,8 @@ class LaneChnageMARL(AbstractEnv):
                     "observation_config": {"type": "Kinematics"},
                 },
                 "lanes_count": 2,
+                "min_speeds": [27.77, 16.66],
+                "max_speeds": [33.33, 27.77],
                 "controlled_vehicles": 5,
                 "safety_guarantee": False,
                 "action_masking": False,
@@ -45,19 +47,21 @@ class LaneChnageMARL(AbstractEnv):
                 "length": 300,
                 "screen_width": 1200,
                 "screen_height": 100,
-                "centering_position": [0.55, 0.5],
-                "scaling": 7,
-                # "scaling": 4,
+                "centering_position": [0.3, 0.5],
+                # "scaling": 7,
+                "scaling": 4,
                 "simulation_frequency": 15,  # [Hz]
                 "duration": 20,  # time step
                 "policy_frequency": 5,  # [Hz]
                 "reward_speed_range": [10, 30],
+
             }
         )
         return config
 
     def _reset(self, num_CAV=0) -> None:
         self._create_road()
+        self._create_goal()
         self._create_vehicles()
         # self.action_is_safe = True
         self.T = int(self.config["duration"] * self.config["policy_frequency"])
@@ -73,75 +77,52 @@ class LaneChnageMARL(AbstractEnv):
         The first vehicle is rewarded for 
             - moving towards the middle of target lane,
         All the vehicles are rewarded for
-            - moving forward,
-            - high speed,
-            - headway distance, 
-            - avoiding collisions,
-            - avoid going off road boundaries.
+            - moving in the middle of the lane
         :param action: the action performed
         :return: the reward of the state-action transition
         """
-        # Optimal reward 0
 
-        last_pos = vehicle.position.copy()
-        if len(vehicle.history) > 1:
-            last_pos = vehicle.history.popleft()
-        
-        # reward for moving forward
-        dx = vehicle.position[0] - last_pos[0]
-        dx_s = utils.lmap(dx, [0, vehicle.LENGTH], [-1, 0])
-        
-        # cost for moving away from the target lane
-        lon, lat = vehicle.target_lane.local_coordinates(vehicle.position)
-        lateral_cost = -np.exp(abs(lat)) + 1 # cost is 0 when vehicle is in the middle of the target lane
-        # lateral_cost = -dy**2 # Option 2 slighly less cost for lateral position to allow smooth transision
-        
-        # add cost for not heading towards the direction of the target lane
-        heading_err = abs(vehicle.heading*5.09223 + lat) # 5.09223 is multiplication factor to equate penalty for 45 degrees heading to 4m off latral distance from target.
-        # according to above equation:
-        # heading ~ 0 when vehicle is heading in the direction of motion
-        # heading ~ 45 when vehicle is one lane way from target
-        # heading ~ 22.5 when vehicle is halfway from target
-        # print("heading {}, lateral: {}, heading_err: {}".format(vehicle.heading, lat, heading_err))
+        r_lateral = 0
+        r_lon = 0
+        r_lane = 0
 
-        heading_cost = -np.exp(heading_err) + 1 
+        if vehicle.goal is not None and vehicle.lane_index[2] != self.config["target_lane"]:
+            # penalty for staying in wrong lane 
+            r_lateral = r_lon = -0.5
 
-        # the optimal reward is 1
-        speed_s = utils.lmap(
-            vehicle.speed, self.config["reward_speed_range"], [0, 1]
-        )
-        speed_s = np.clip(speed_s, 0, 1)
+            # penalty for not reaching the target lane
+            if self._agent_is_terminal(vehicle):
+                r_lateral = r_lon = -100
+        else:
+            # one time reward for completing the lane change
+            if vehicle.goal is not None:
+                r_lateral = r_lon = 100
+                vehicle.goal = None
+            if self._agent_is_terminal(vehicle):
+                return 0
+            
+            # reward for lane following
+            lon, lat = vehicle.lane.local_coordinates(vehicle.position)
+            r_lateral = 1 if vehicle.heading == 0 and lat == 0 else 0
 
-        # compute headway cost
-        headway_distance = self._compute_headway_distance(vehicle)
-        headway_cost = (
-            np.log(headway_distance / (self.config["HEADWAY_TIME"] * vehicle.speed))
-            if vehicle.speed > 0
-            else 0
-        )
-        headway_cost = (headway_cost if headway_cost < 0 else 0)
+            cur_lane = vehicle.lane
 
-        # reward for not colliding
-        # TODO: test this reward
-        # multliy steps/T with 5.311 to equate the cummulative reward of being alive to approximately 2000
-        alive_reward = np.exp(self.steps/self.T)
+            if cur_lane.min_speed <= vehicle.speed <= cur_lane.speed_limit:
+                r_lon = 2 - 0.01 * (cur_lane.speed_limit - vehicle.speed)
+            elif -20 <= (cur_lane.speed_limit - vehicle.speed) <= 0:
+                r_lon = 0.5 + 0.01 * (cur_lane.speed_limit - vehicle.speed)
+            elif -40 <= (vehicle.speed - cur_lane.min_speed) <= 0:
+                r_lon = 0.5 + 0.01 * (vehicle.speed - cur_lane.min_speed)
 
-        # compute overall reward
-        reward = (
-            # self.config["LATERAL_MOTION_COST"] * lateral_cost
-            self.config["LATERAL_MOTION_COST"] * heading_cost
-            + self.config["HIGH_SPEED_REWARD"] * speed_s
-            + self.config["HEADWAY_COST"] * headway_cost
-            + self.config["COLLISION_COST"] * (-1 * vehicle.crashed)
-            + self.config["ALIVE_REWARD"] * alive_reward
-        )
-        # print("Stepwise reward: {}".format(reward))
+        # Take fast lane
+        if vehicle.lane_index[2] == 0: # right lane
+            r_lane = 0.5
+        elif vehicle.lane_index[2] == 1: # left lane
+            r_lane = 1
+            
+        reward = r_lateral + r_lon + r_lane
+
         return reward
-
-    def _create_road(self) -> None:
-        """Create a road composed of straight adjacent lanes."""
-        self.road = Road(network=RoadNetwork.straight_road_network(self.config["lanes_count"], length= self.config["length"]),
-                         np_random=self.np_random, record_history=self.config["show_trajectories"])
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, dict]:
         agent_info = []
@@ -169,7 +150,7 @@ class LaneChnageMARL(AbstractEnv):
         for vehicle in self.controlled_vehicles:
             vehicle.local_reward = self._agent_reward(action, vehicle)
         # local reward
-        info["agents_rewards"] = tuple(
+        info["regional_rewards"] = tuple(
             vehicle.local_reward for vehicle in self.controlled_vehicles
         )
 
@@ -194,6 +175,17 @@ class LaneChnageMARL(AbstractEnv):
             or self.steps >= self.config["duration"] * self.config["policy_frequency"]
         )
     
+    def _create_road(self) -> None:
+        """Create a road composed of straight adjacent lanes."""
+        self.road = Road(network=RoadNetwork.straight_road_network(self.config["lanes_count"], length= self.config["length"], min_speeds = self.config["min_speeds"], max_speeds = self.config["max_speeds"]),
+                         np_random=self.np_random, record_history=self.config["show_trajectories"])
+        
+    def _create_goal(self) -> None:
+        """Create a goal region on the straight lane for the LC vehicle"""
+        lane = self.road.network.get_lane(("0", "1", self.config["target_lane"]))
+        self.goal = Landmark.make_on_lane(lane=lane, longitudinal=lane.length - Vehicle.LENGTH)
+        self.road.objects.append(self.goal)
+
     def _create_vehicles(self) -> None:
         """Create a central vehicle and four other AVs surrounding a main vehicle in random positions."""
 
@@ -220,14 +212,17 @@ class LaneChnageMARL(AbstractEnv):
         lc_vehicle_spwan_lane = (target_lane_index + 1) % lane_count
         # lc_vehicle_spwan_lane = target_lane_index
 
-        lc_vehicle = self.action_type.vehicle_class(
+        lc_vehicle: ControlledBicycleVehicle = self.action_type.vehicle_class(
                 road = road,
                 position = road.network.get_lane(("0", "1", lc_vehicle_spwan_lane)).position(
                     lc_spawn_pos, 0
                 ),
                 speed = initial_speed.pop(0),
             )
+        
         lc_vehicle.set_target_lane(target_lane_index)
+        lc_vehicle.set_goal(self.goal)
+
         self.controlled_vehicles.append(lc_vehicle)
         road.vehicles.append(lc_vehicle)
 

@@ -349,7 +349,7 @@ class RoadObjectGraphics:
                 # indicates success
                 color = cls.GREEN
             else:
-                color = cls.BLUE
+                color = cls.YELLOW
 
         if transparent:
             color = (color[0], color[1], color[2], 30)

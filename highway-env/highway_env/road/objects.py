@@ -7,6 +7,7 @@ from highway_env.road.lane import AbstractLane
 
 LaneIndex = Tuple[str, str, int]
 
+import traceback
 
 class RoadObject(ABC):
 
@@ -91,4 +92,13 @@ class Landmark(RoadObject):
 
     """Landmarks of certain areas on the road that must be reached."""
 
-    pass
+    def __init__(self, position: Sequence[float], speed: float = 0, heading: float = 0):
+        super().__init__(position, speed, heading)
+        self.lane_num = -1
+
+    def set_target_lane(self,lane_num: int):
+        # print("set target lane type: ", type(lane_num), "value: ", lane_num)
+        # if type(lane_num) is not int:
+        #     traceback.print_stack()
+        #     exit()
+        self.lane_num = lane_num

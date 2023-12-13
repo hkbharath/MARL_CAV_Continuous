@@ -215,6 +215,7 @@ class MAPPO:
     # predict softmax action based on state
     def _continuous_action(self, state, n_agents):
         state_var = to_tensor_var([state], self.use_cuda)
+        # print(state_var[:, 0, :])
 
         continuous_action = []
         for agent_id in range(n_agents):
@@ -272,6 +273,7 @@ class MAPPO:
         vehicle_position = []
         video_recorder = None
         seeds = [int(s) for s in self.test_seeds.split(',')]
+        wait_once = True
 
         for i in range(eval_episodes):
             avg_speed = 0
@@ -323,6 +325,9 @@ class MAPPO:
                     rendered_frame = env.render(mode="rgb_array")
                     if video_recorder is not None:
                         video_recorder.add_frame(rendered_frame)
+                if step == 3 and wait_once:
+                    input("Press Enter to continue...")
+                    wait_once = False
 
                 rewards_i.append(reward)
                 infos_i.append(info)
@@ -338,6 +343,12 @@ class MAPPO:
             # self.debug_vehicle_position()
             # create_action_distribution(np.array(actions).reshape(-1, 2))
             # create_line_plot(np.array(rewards_i).reshape(-1, 1))
+            
+            lc_veh_action = np.array(actions)[:,0]
+            print("Acceleration", lc_veh_action[:,0])
+            print("Steering", lc_veh_action[:,1])
+            create_line_plot(lc_veh_action[:,0], title="Actions", ylabel="Acceleration", xlabel="Step")
+            create_line_plot(lc_veh_action[:,1], title="Actions", ylabel="Steering", xlabel="Step")
 
         if video_recorder is not None:
             video_recorder.release()
@@ -443,11 +454,11 @@ def create_scatter_plot(cav, hdv, title="Positions"):
 #     plt.ylabel("Speed")
 #     plt.legend()
 
-def create_line_plot(s, title = "Speed"):
+def create_line_plot(s, title = "Speed", ylabel = "Reward", xlabel = "Episode"):
     x = range(len(s))
-    plt.plot(x, s, label='rewards', color='red', linestyle='-')
+    plt.plot(x, s, color='red', linestyle='-')
     plt.title(title)
-    plt.xlabel("Espisode")
-    plt.ylabel("Reward")
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
     plt.legend()
     plt.show()

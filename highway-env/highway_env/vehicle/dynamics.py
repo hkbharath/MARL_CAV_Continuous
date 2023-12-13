@@ -24,9 +24,9 @@ class BicycleVehicle(Vehicle):
     FRICTION_FRONT: float = 15.0 * MASS  # [N]
     FRICTION_REAR: float = 15.0 * MASS  # [N]
 
-    MAX_ANGULAR_SPEED: float = 3 * np.pi  # [rad/s] 2* np.pi before
+    MAX_ANGULAR_SPEED: float = 2 * np.pi  # [rad/s] 2* np.pi before
     MAX_SPEED: float = 40  # [m/s] 15 before
-    MAX_STEERING_ANGLE: float = np.pi / 3  # [rad] np.pi/2 before
+    MAX_STEERING_ANGLE: float = np.pi / 2  # [rad] np.pi/2 before
     MAX_ACCELERATION: float = 3  # [m/s2] 
 
     def __init__(self, road: Road, position: Vector, heading: float = 0, speed: float = 0) -> None:
@@ -215,6 +215,36 @@ class ControlledBicycleVehicle(BicycleVehicle):
 
     def set_goal(self, goal: Landmark) -> None:
         self.goal = goal
+
+    def dist_to_right(self) -> float:
+        # assuming 2 lanes
+        l_width = self.road.network.lanes_list()[0].width_at(0)
+        if self.lane_index[2] == 0:
+            return abs(self.lane.local_coordinates(self.position)[1] - l_width/2)
+        elif self.lane_index[2] == 1:
+            return abs(self.lane.local_coordinates(self.position)[1] - 3*l_width/2)
+        
+        raise ValueError("dist_to_right() called on a vehicle not on a valid 2 lane road")
+
+    def dist_to_left(self) -> float:
+        # assuming 2 lanes
+        l_width = self.road.network.lanes_list()[0].width_at(0)
+        if self.lane_index[2] == 1:
+            return abs(self.lane.local_coordinates(self.position)[1] + l_width/2)
+        elif self.lane_index[2] == 0:
+            return abs(self.lane.local_coordinates(self.position)[1] + 3*l_width/2)
+        
+        raise ValueError("dist_to_right() called on a vehicle not on a valid 2 lane road")
+    
+    def dist_to_mid(self) -> float:
+        # assuming 2 lanes
+        l_width = self.road.network.lanes_list()[0].width_at(0)
+        if self.lane_index[2] == 0:
+            return abs(self.lane.local_coordinates(self.position)[1] + l_width/2)
+        elif self.lane_index[2] == 1:
+            return abs(self.lane.local_coordinates(self.position)[1] - l_width/2)
+        
+        raise ValueError("dist_to_right() called on a vehicle not on a valid 2 lane road")
 
     # def steering_control(self) -> float:
     #     """

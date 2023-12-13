@@ -95,7 +95,7 @@ def train(args):
     env.config['LONGITUDINAL_MOTION_REWARD'] = config.getfloat('ENV_CONFIG', 'LONGITUDINAL_MOTION_REWARD')
     env.config['LATERAL_MOTION_COST'] = config.getfloat('ENV_CONFIG', 'LATERAL_MOTION_COST')
     env.config['ALIVE_REWARD'] = config.getfloat('ENV_CONFIG', 'ALIVE_REWARD')
-    env.config['target_lane'] = config.getboolean('ENV_CONFIG', 'target_lane')
+    env.config['target_lane'] = config.getint('ENV_CONFIG', 'target_lane')
     env.config['action_masking'] = config.getboolean('MODEL_CONFIG', 'action_masking')
 
     assert env.T % ROLL_OUT_N_STEPS == 0
@@ -130,7 +130,7 @@ def train(args):
                   reward_gamma=reward_gamma, reward_type=reward_type,
                   max_grad_norm=MAX_GRAD_NORM, test_seeds=test_seeds,
                   episodes_before_train=EPISODES_BEFORE_TRAIN,
-                  render=True)
+                  render=False)
 
     # load the model if exist
     mappo.load(model_dir, train_mode=True)
@@ -141,6 +141,7 @@ def train(args):
     # track time
     ts = time.time()
     print("\n\nExperiment: %s" % output_dir)
+
     while mappo.n_episodes < MAX_EPISODES:
         mappo.interact()
         if mappo.n_episodes >= EPISODES_BEFORE_TRAIN:

@@ -9,6 +9,8 @@ from highway_env import utils
 from highway_env.envs.common.finite_mdp import compute_ttc_grid
 from highway_env.road.lane import AbstractLane
 from highway_env.vehicle.controller import MDPVehicle
+from highway_env.vehicle.dynamics import ControlledBicycleVehicle
+from highway_env.road.objects import Landmark
 
 if TYPE_CHECKING:
     from highway_env.envs.common.abstract import AbstractEnv
@@ -396,30 +398,34 @@ def observation_factory(env: 'AbstractEnv', config: dict) -> ObservationType:
         return AttributesObservation(env, **config)
     elif config["type"] == "MultiAgentObservation":
         return MultiAgentObservation(env, **config)
+    elif config["type"] == "KinameticObsExt":
+        return KinameticObsExt(env, **config)
     else:
         raise ValueError("Unknown observation type")
 
 # TODO: evaluate and collect observations
-class KinameticObsExtended(ObservationType):
+class KinameticObsExt(ObservationType):
 
     """Observe the kinematics of nearby vehicles and distance from road edges"""
 
     #['front wheel angle', 'speed', 'acceleration']
-    CAR_FEATURES: Dict[str, List[float]] = {'del':[], 'v':[], 'a':[]} 
+    # * - host vehicle
+    # lf - left front vehicle  
+    # lb - left back vehicle
+    # rf - right front vehicle
+    # rb - right back vehicle
+    CAR_FEATURES: List[str] = ['del', 'v', 'a', 'del_lf', 'v_lf', 'a_lf', 'del_lb', 'v_lb', 'a_lb','del_rf', 'v_rf', 'a_rf', 'del_rb', 'v_rb', 'a_rb']
     
     #['angle', 'left distance', 'middle distance', 'right distance', 
     # 'current_lane', 'left_lane_v_upper', 'left_lane_v_lower', 'right_lane_v_upper', 'right_lane_v_lower']
-    ROAD_FEATURES: Dict[str, List[float]] = {'phi':[], 'dl':[], 'dm':[], 'dr':[],
-                                'curr_lane':[], 'left_lane_vu':[], 'left_lane_vl':[], 'right_lane_vu':[], 'right_lane_vl':[]}
+    ROAD_FEATURES: List[str] = ['phi', 'dl', 'dm', 'dr',
+                                'curr_lane', 'left_lane_vu', 'left_lane_vl', 'right_lane_vu', 'right_lane_vl']
 
-    DESTINATION_FEATURES: Dict[str, List[float]]  = {'dest_lane':[], 'dest_dist':[]} 
+    DESTINATION_FEATURES: List[str]  = ['dest_lane', 'dest_dist'] 
 
     def __init__(self, env: 'AbstractEnv',
                  features: List[str] = None,
-                 vehicles_count: int = 5,
-                 features_range: Dict[str, List[float]] = None,
-                 absolute: bool = False,
-                 order: str = "sorted",
+                 vehicles_count: int = 4,
                  normalize: bool = True,
                  clip: bool = True,
                  see_behind: bool = True,
@@ -437,74 +443,88 @@ class KinameticObsExtended(ObservationType):
         :param observe_intentions: Observe the destinations of other vehicles
         """
         super().__init__(env)
-        self.features = features or self.FEATURES
         self.vehicles_count = vehicles_count
-        self.features_range = features_range
         self.normalize = normalize
         self.clip = clip
         self.see_behind = see_behind
         self.observe_intentions = observe_intentions
+        self.features = features if features is not None else self.CAR_FEATURES + self.ROAD_FEATURES + self.DESTINATION_FEATURES
 
     def space(self) -> spaces.Space:
-        return spaces.Box(shape=(self.vehicles_count, len(self.features)), low=-1, high=1, dtype=np.float32)
-
-    def normalize_obs(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Normalize the observation values.
-
-        For now, assume that the road is straight along the x axis.
-        :param Dataframe df: observation data
-        """
-        if not self.features_range:
-            # side_lanes = self.env.road.network.all_side_lanes(self.observer_vehicle.lane_index)
-            # self.features_range = {
-            #     "x": [-5.0 * MDPVehicle.SPEED_MAX, 5.0 * MDPVehicle.SPEED_MAX],
-            #     "y": [-AbstractLane.DEFAULT_WIDTH * len(side_lanes), AbstractLane.DEFAULT_WIDTH * len(side_lanes)],
-            #     "vx": [-2*MDPVehicle.SPEED_MAX, 2*MDPVehicle.SPEED_MAX],
-            #     "vy": [-2*MDPVehicle.SPEED_MAX, 2*MDPVehicle.SPEED_MAX]
-            # }
-            self.features_range = {
-                "x": [-5.0 * MDPVehicle.SPEED_MAX, 5.0 * MDPVehicle.SPEED_MAX],
-                "y": [-12, 12],
-                "vx": [-1.5 * MDPVehicle.SPEED_MAX, 1.5 * MDPVehicle.SPEED_MAX],
-                "vy": [-1.5 * MDPVehicle.SPEED_MAX, 1.5 * MDPVehicle.SPEED_MAX]
-            }
-        for feature, f_range in self.features_range.items():
-            if feature in df:
-                df[feature] = utils.lmap(df[feature], [f_range[0], f_range[1]], [-1, 1])
-                if self.clip:
-                    df[feature] = np.clip(df[feature], -1, 1)
-        return df
+        return spaces.Box(shape=(1, len(self.features)), low=-1, high=1, dtype=np.float32)
 
     def observe(self) -> np.ndarray:
         if not self.env.road:
             return np.zeros(self.space().shape)
+        
+        obs_dict = {el: 0 for el in self.features}
+
+        host_vehicle: ControlledBicycleVehicle = self.observer_vehicle
 
         # Add ego-vehicle
-        df = pd.DataFrame.from_records([self.observer_vehicle.to_dict()])[self.features]
+        obs_dict['del'] = host_vehicle.heading
+        obs_dict['v'] = host_vehicle.speed
+        obs_dict['a'] = host_vehicle.action['acceleration']
+
         # Add nearby traffic
         # sort = self.order == "sorted"
-        close_vehicles = self.env.road.close_vehicles_to(self.observer_vehicle,
+        close_vehicles = self.env.road.close_vehicles_to(host_vehicle,
                                                          self.env.PERCEPTION_DISTANCE,
                                                          count=self.vehicles_count - 1,
                                                          see_behind=self.see_behind)
+        # set default distance if vehicle does nto exist
+        obs_dict['del_rf'] = 2 * host_vehicle.LENGTH
+        obs_dict['del_lf'] = 2 * host_vehicle.LENGTH
+        obs_dict['del_rb'] = 2 * host_vehicle.LENGTH
+        obs_dict['del_lb'] = 2 * host_vehicle.LENGTH
+
         if close_vehicles:
-            origin = self.observer_vehicle if not self.absolute else None
-            df = df.append(pd.DataFrame.from_records(
-                [v.to_dict(origin, observe_intentions=self.observe_intentions)
-                 for v in close_vehicles[-self.vehicles_count + 1:]])[self.features],
-                           ignore_index=True)
-        # Normalize and clip
-        if self.normalize:
-            df = self.normalize_obs(df)
-        # Fill missing rows
-        if df.shape[0] < self.vehicles_count:
-            rows = np.zeros((self.vehicles_count - df.shape[0], len(self.features)))
-            df = df.append(pd.DataFrame(data=rows, columns=self.features), ignore_index=True)
-        # Reorder
-        df = df[self.features]
-        obs = df.values.copy()
-        if self.order == "shuffled":
-            self.env.np_random.shuffle(obs[1:])
-        # Flatten
+            for v in close_vehicles[-self.vehicles_count + 1:]:
+                vf = v.to_dict(host_vehicle, observe_intentions=self.observe_intentions)
+                if vf['x'] > 0:
+                    if v.lane_index[2] == 0:
+                        obs_dict['del_rf'] = vf['x']
+                        obs_dict['v_rf'] = v.speed
+                        obs_dict['a_rf'] = v.action['acceleration']
+                    elif v.lane_index[2] == 1:
+                        obs_dict['del_lf'] = vf['x']
+                        obs_dict['v_lf'] = v.speed
+                        obs_dict['a_lf'] = v.action['acceleration']
+                else:
+                    if v.lane_index[2] == 0:
+                        obs_dict['del_rb'] = vf['x']
+                        obs_dict['v_rb'] = v.speed
+                        obs_dict['a_rb'] = v.action['acceleration']
+                    elif v.lane_index[2] == 1:
+                        obs_dict['del_lb'] = vf['x']
+                        obs_dict['v_lb'] = v.speed
+                        obs_dict['a_lb'] = v.action['acceleration']
+
+        # Add road features
+        obs_dict['phi'] = host_vehicle.lane.heading_at(host_vehicle.position[0])
+        # Fix these
+        obs_dict['dl'] = host_vehicle.dist_to_left()
+        obs_dict['dm'] = host_vehicle.dist_to_mid()
+        obs_dict['dr'] = host_vehicle.dist_to_right()
+
+        obs_dict['curr_lane'] = host_vehicle.lane_index[2]
+
+        lanes_list = self.env.road.network.lanes_list()
+        obs_dict['left_lane_vu'] = lanes_list[1].speed_limit
+        obs_dict['left_lane_vl'] = lanes_list[1].min_speed
+        obs_dict['right_lane_vu'] = lanes_list[0].speed_limit
+        obs_dict['right_lane_vl'] = lanes_list[0].min_speed
+
+        for ob in self.env.road.objects:
+            if isinstance(ob, Landmark):
+                dest:Landmark = ob
+                # print("Goal lane number: {}".format(type(dest.lane_num)))
+                obs_dict['dest_lane'] = dest.lane_num
+                obs_dict['dest_dist'] = dest.position[0] - host_vehicle.position[0]
+
+        # print("Observations:")
+        # print(obs_dict)
+
+        obs = np.array([[val if val else 0 for val in obs_dict.values()]])
+
         return obs

@@ -212,9 +212,9 @@ class RoadNetwork(object):
             line_types = [LineType.CONTINUOUS_LINE if lane == 0 else LineType.STRIPED,
                           LineType.CONTINUOUS_LINE if lane == lanes - 1 else LineType.NONE]
             new_lane = StraightLane(origin, end, line_types=line_types)
-            if max_speeds is not None and len(max_speeds) < lane:
+            if max_speeds is not None and len(max_speeds) > lane:
                 new_lane.speed_limit = max_speeds[lane]
-            if min_speeds is not None and len(min_speeds) < lane:
+            if min_speeds is not None and len(min_speeds) > lane:
                 new_lane.min_speed = min_speeds[lane]
             net.add_lane("0", "1", new_lane)
         return net

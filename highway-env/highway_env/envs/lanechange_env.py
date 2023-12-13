@@ -16,7 +16,7 @@ from highway_env.road.objects import Landmark
 class LaneChnageMARL(AbstractEnv):
 
     n_a = 2
-    n_s = 25
+    n_s = 26
     
     @classmethod
     def default_config(cls) -> dict:
@@ -34,7 +34,7 @@ class LaneChnageMARL(AbstractEnv):
                 },
                 "observation": {
                     "type": "MultiAgentObservation",
-                    "observation_config": {"type": "Kinematics"},
+                    "observation_config": {"type": "KinameticObsExt"},
                 },
                 "lanes_count": 2,
                 "min_speeds": [27.77, 16.66],
@@ -86,20 +86,23 @@ class LaneChnageMARL(AbstractEnv):
         r_lon = 0
         r_lane = 0
 
-        if vehicle.goal is not None and vehicle.lane_index[2] != self.config["target_lane"]:
+        if vehicle.goal is not None and (vehicle.lane_index[2] != self.config["target_lane"]):
             # penalty for staying in wrong lane 
             r_lateral = r_lon = -0.5
+
+            # one time reward for reaching the goal
+            if vehicle.goal is not None and vehicle.goal.hit:
+                r_lateral = r_lon = 100
+                vehicle.goal = None
 
             # penalty for not reaching the target lane
             if self._agent_is_terminal(vehicle):
                 r_lateral = r_lon = -100
         else:
-            # one time reward for completing the lane change
-            if vehicle.goal is not None:
+            # one time reward for reaching the goal
+            if vehicle.goal is not None and vehicle.goal.hit:
                 r_lateral = r_lon = 100
                 vehicle.goal = None
-            if self._agent_is_terminal(vehicle):
-                return 0
             
             # reward for lane following
             lon, lat = vehicle.lane.local_coordinates(vehicle.position)
@@ -113,6 +116,9 @@ class LaneChnageMARL(AbstractEnv):
                 r_lon = 0.5 + 0.01 * (cur_lane.speed_limit - vehicle.speed)
             elif -40 <= (vehicle.speed - cur_lane.min_speed) <= 0:
                 r_lon = 0.5 + 0.01 * (vehicle.speed - cur_lane.min_speed)
+
+            if self._agent_is_terminal(vehicle):
+                r_lateral = r_lon = -100 if vehicle.goal is None else 0
 
         # Take fast lane
         if vehicle.lane_index[2] == 0: # right lane
@@ -137,6 +143,7 @@ class LaneChnageMARL(AbstractEnv):
             local_coords = v.lane.local_coordinates(v.position)
             local_info.append([local_coords[0], local_coords[1], v.speed])
             if np.isnan(v.position).any():
+                print("Vehicle action: ", action)
                 raise ValueError("Vehicle position is NaN")
         info["agents_info"] = agent_info
         info["hdv_info"] = local_info
@@ -184,6 +191,7 @@ class LaneChnageMARL(AbstractEnv):
         """Create a goal region on the straight lane for the LC vehicle"""
         lane = self.road.network.get_lane(("0", "1", self.config["target_lane"]))
         self.goal = Landmark.make_on_lane(lane=lane, longitudinal=lane.length - Vehicle.LENGTH)
+        self.goal.set_target_lane(self.config["target_lane"])
         self.road.objects.append(self.goal)
 
     def _create_vehicles(self) -> None:

@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument('--model-dir', type=str, required=False,
                         default='', help="pretrained model path")
     parser.add_argument('--evaluation-seeds', type=str, required=False,
-                        default=','.join([str(i) for i in range(0, 600, 20)]),
+                        default=','.join([str(np.random.randint(1000)) for i in range(50)]),
                         help="random seeds for evaluation, split by ,")
     parser.add_argument('--env-name', type=str, required=False,
                         default='merge-multi-agent-continuous-v0', help="environment name")
@@ -149,10 +149,13 @@ def train(args):
         if mappo.episode_done and ((mappo.n_episodes + 1) % EVAL_INTERVAL == 0):
             rewards, _, _, _ = mappo.evaluation(env_eval, dirs['train_videos'], EVAL_EPISODES)
             rewards_mu, rewards_std = agg_double_list(rewards)
-            print("Episode %d, Average Reward %.2f, Execution time: %.2f s" % (mappo.n_episodes + 1, rewards_mu, (time.time() - ts)), flush=True)
+            print("Episode %d, Reward (#0) %.2f, Execution time: %.2f s" % (mappo.n_episodes + 1, rewards_mu, (time.time() - ts)), flush=True)
             eval_rewards.append(rewards_mu)
             # save the model
             mappo.save(dirs['models'], mappo.n_episodes + 1)
+            
+            # reset time
+            ts = time.time()
 
     # save the model
     mappo.save(dirs['models'], MAX_EPISODES + 2)
@@ -239,7 +242,7 @@ def evaluate(args):
     rewards, _, steps, avg_speeds = mappo.evaluation(env, video_dir, len(seeds), is_train=False)
 
     rewards_mu, rewards_std = agg_double_list(rewards)
-    print("Episode %d, Average Reward %.2f" % (mappo.n_episodes + 1, rewards_mu))
+    print("Episode %d, Reward (#0) %.2f" % (mappo.n_episodes + 1, rewards_mu))
 
 
 if __name__ == "__main__":

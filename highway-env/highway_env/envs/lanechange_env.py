@@ -67,10 +67,8 @@ class LaneChnageMARL(AbstractEnv):
         self.T = int(self.config["duration"] * self.config["policy_frequency"])
 
     def _reward(self, action: int) -> float:
-        # Cooperative multi-agent reward
-        return sum(
-            self._agent_reward(action, vehicle) for vehicle in self.controlled_vehicles
-        ) / len(self.controlled_vehicles)
+        # Award from only the lc vehicle for reporting
+        return self._agent_reward(action, self.controlled_vehicles[0])
 
     def _agent_reward(self, action: int, vehicle: ControlledBicycleVehicle) -> float:
         """
@@ -93,17 +91,12 @@ class LaneChnageMARL(AbstractEnv):
             # one time reward for reaching the goal
             if vehicle.goal is not None and vehicle.goal.hit:
                 r_lateral = r_lon = 100
-                vehicle.goal = None
-
+                if vehicle.heading == 0:
+                    r_lateral += 100
             # penalty for not reaching the target lane
-            if self._agent_is_terminal(vehicle):
+            elif self._agent_is_terminal(vehicle):
                 r_lateral = r_lon = -100
         else:
-            # one time reward for reaching the goal
-            if vehicle.goal is not None and vehicle.goal.hit:
-                r_lateral = r_lon = 100
-                vehicle.goal = None
-            
             # reward for lane following
             lon, lat = vehicle.lane.local_coordinates(vehicle.position)
             r_lateral = 1 if vehicle.heading == 0 and lat == 0 else 0
@@ -117,13 +110,18 @@ class LaneChnageMARL(AbstractEnv):
             elif -40 <= (vehicle.speed - cur_lane.min_speed) <= 0:
                 r_lon = 0.5 + 0.01 * (vehicle.speed - cur_lane.min_speed)
 
-            if self._agent_is_terminal(vehicle):
+            # one time reward for reaching the goal
+            if vehicle.goal is not None and vehicle.goal.hit:
+                r_lateral = r_lon = 100
+                if vehicle.heading == 0:
+                    r_lateral += 100
+            elif self._agent_is_terminal(vehicle):
                 r_lateral = r_lon = -100 if vehicle.goal is None else 0
 
         # Take fast lane
-        if vehicle.lane_index[2] == 0: # right lane
+        if vehicle.lane_index[2] == 1: # right lane
             r_lane = 0.5
-        elif vehicle.lane_index[2] == 1: # left lane
+        elif vehicle.lane_index[2] == 0: # left lane
             r_lane = 1
             
         reward = r_lateral + r_lon + r_lane
@@ -172,6 +170,7 @@ class LaneChnageMARL(AbstractEnv):
         """The episode is over when a collision occurs or when the access ramp has been passed."""
         return (
             any(vehicle.crashed for vehicle in self.controlled_vehicles)
+            or any(vehicle.goal is not None and vehicle.goal.hit for vehicle in self.controlled_vehicles)
             or self.steps >= self.config["duration"] * self.config["policy_frequency"]
         )
 
@@ -179,6 +178,7 @@ class LaneChnageMARL(AbstractEnv):
         """The episode is over when a collision occurs or when the access ramp has been passed."""
         return (
             vehicle.crashed
+            or vehicle.goal is not None and vehicle.goal.hit
             or self.steps >= self.config["duration"] * self.config["policy_frequency"]
         )
     
@@ -190,7 +190,9 @@ class LaneChnageMARL(AbstractEnv):
     def _create_goal(self) -> None:
         """Create a goal region on the straight lane for the LC vehicle"""
         lane = self.road.network.get_lane(("0", "1", self.config["target_lane"]))
-        self.goal = Landmark.make_on_lane(lane=lane, longitudinal=lane.length - Vehicle.LENGTH)
+        # get a randondom point at second 1/3 part of the road.
+        goal_pos = (self.config["length"] * (0.75 + np.random.rand()))/3
+        self.goal = Landmark.make_on_lane(lane=lane, longitudinal=goal_pos)
         self.goal.set_target_lane(self.config["target_lane"])
         self.road.objects.append(self.goal)
 
@@ -280,6 +282,7 @@ class LaneChnageMARL(AbstractEnv):
             return False
         # if vehicle.position[0] > self.config["length"]: let the vehicle go out of the max length
         return True
+    
 register(
     id="lanechange-marl-v0",
     entry_point="highway_env.envs:LaneChnageMARL",

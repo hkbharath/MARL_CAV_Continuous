@@ -26,7 +26,7 @@ class BicycleVehicle(Vehicle):
 
     MAX_ANGULAR_SPEED: float = 2 * np.pi  # [rad/s] 2* np.pi before
     MAX_SPEED: float = 40  # [m/s] 15 before
-    MAX_STEERING_ANGLE: float = np.pi / 2  # [rad] np.pi/2 before
+    MAX_STEERING_ANGLE: float = np.pi / 180   # [rad] np.pi/2 before
     MAX_ACCELERATION: float = 3  # [m/s2] 
 
     def __init__(self, road: Road, position: Vector, heading: float = 0, speed: float = 0) -> None:
@@ -245,6 +245,13 @@ class ControlledBicycleVehicle(BicycleVehicle):
             return abs(self.lane.local_coordinates(self.position)[1] - l_width/2)
         
         raise ValueError("dist_to_right() called on a vehicle not on a valid 2 lane road")
+
+    def check_collision(self, other):
+        super().check_collision(other)
+        # check collosion for landmark and vehicle goal
+        if isinstance(other, Landmark):
+            if self._is_colliding(other) and (self.goal is not None):
+                other.hit = True
 
     # def steering_control(self) -> float:
     #     """

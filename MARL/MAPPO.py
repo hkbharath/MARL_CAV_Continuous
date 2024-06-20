@@ -273,7 +273,7 @@ class MAPPO:
         vehicle_position = []
         video_recorder = None
         seeds = [int(s) for s in self.test_seeds.split(',')]
-        wait_once = True
+        wait_once = False
 
         for i in range(eval_episodes):
             avg_speed = 0
@@ -344,11 +344,13 @@ class MAPPO:
             # create_action_distribution(np.array(actions).reshape(-1, 2))
             # create_line_plot(np.array(rewards_i).reshape(-1, 1))
             
-            lc_veh_action = np.array(actions)[:,0]
-            print("Acceleration", lc_veh_action[:,0])
-            print("Steering", lc_veh_action[:,1])
-            create_line_plot(lc_veh_action[:,0], title="Actions", ylabel="Acceleration", xlabel="Step")
-            create_line_plot(lc_veh_action[:,1], title="Actions", ylabel="Steering", xlabel="Step")
+            # lc_veh_action = np.array(actions)[:,0]
+            # print("Action space", lc_veh_action.shape)
+            # print("total Steps", step)
+            # print("Acceleration", lc_veh_action[:,0])
+            # print("Steering", lc_veh_action[:,1])
+            # create_line_plot(lc_veh_action[:,0], title="Actions", ylabel="Acceleration", xlabel="Step")
+            # create_line_plot(lc_veh_action[:,1], title="Actions", ylabel="Steering", xlabel="Step")
 
         if video_recorder is not None:
             video_recorder.release()

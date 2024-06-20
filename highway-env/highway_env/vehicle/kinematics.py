@@ -194,9 +194,9 @@ class Vehicle(object):
             if self._is_colliding(other):
                 self.speed = min([self.speed, 0], key=abs)
                 self.crashed = other.hit = True
-        elif isinstance(other, Landmark):
-            if self._is_colliding(other):
-                other.hit = True
+        # elif isinstance(other, Landmark):
+        #     if self._is_colliding(other):
+        #         other.hit = True
 
     def _is_colliding(self, other):
         # Fast spherical pre-check
